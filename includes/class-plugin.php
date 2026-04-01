@@ -103,6 +103,7 @@ class CoTranslate_Plugin {
 
 		if ( is_admin() ) {
 			require_once $dir . 'class-admin.php';
+			require_once $dir . 'class-updater.php';
 		}
 	}
 
@@ -151,6 +152,10 @@ class CoTranslate_Plugin {
 		if ( is_admin() ) {
 			$this->admin = new CoTranslate_Admin( $this->api, $this->store, $this->post_translator );
 			$this->admin->init();
+
+			// Automatiska uppdateringar via GitHub
+			$updater = new CoTranslate_Updater();
+			$updater->init();
 		}
 
 		// Frontend: registrera content-filter
