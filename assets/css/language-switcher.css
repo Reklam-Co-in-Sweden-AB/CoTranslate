@@ -1,0 +1,304 @@
+/**
+ * CoTranslate språkväljare
+ */
+
+/* Gemensamt */
+.cotranslate-switcher {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+	font-size: 14px;
+	line-height: 1.4;
+}
+
+.cotranslate-flag {
+	margin-right: 6px;
+	font-size: 16px;
+}
+
+/* ===== DROPDOWN ===== */
+.cotranslate-dropdown {
+	position: relative;
+	display: inline-block;
+}
+
+.cotranslate-dropdown-toggle {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 8px 14px;
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 14px;
+	color: #333;
+	transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.cotranslate-dropdown-toggle:hover {
+	border-color: #999;
+}
+
+.cotranslate-dropdown-toggle:focus {
+	outline: 2px solid #0073aa;
+	outline-offset: 2px;
+}
+
+.cotranslate-arrow {
+	font-size: 10px;
+	margin-left: 4px;
+	transition: transform 0.2s;
+}
+
+.cotranslate-dropdown[data-open="true"] .cotranslate-arrow {
+	transform: rotate(180deg);
+}
+
+.cotranslate-dropdown-menu {
+	display: none;
+	position: absolute;
+	top: 100%;
+	left: 0;
+	margin-top: 4px;
+	padding: 4px 0;
+	background: #fff;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	list-style: none;
+	min-width: 160px;
+	z-index: 9999;
+}
+
+.cotranslate-dropdown[data-open="true"] .cotranslate-dropdown-menu {
+	display: block;
+}
+
+.cotranslate-lang-option {
+	display: flex;
+	align-items: center;
+	padding: 8px 14px;
+	color: #333;
+	text-decoration: none;
+	transition: background 0.15s;
+}
+
+.cotranslate-lang-option:hover {
+	background: #f5f5f5;
+	color: #333;
+	text-decoration: none;
+}
+
+.cotranslate-lang-option.cotranslate-active {
+	background: #f0f6fc;
+	font-weight: 600;
+	color: #0073aa;
+}
+
+/* ===== COMPACT ===== */
+.cotranslate-compact {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.cotranslate-compact-link {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+	padding: 4px 8px;
+	color: #666;
+	text-decoration: none;
+	font-size: 13px;
+	border-radius: 4px;
+	transition: color 0.15s, background 0.15s;
+}
+
+.cotranslate-compact-link:hover {
+	color: #333;
+	background: #f5f5f5;
+	text-decoration: none;
+}
+
+.cotranslate-compact-link.cotranslate-active {
+	color: #0073aa;
+	font-weight: 600;
+}
+
+.cotranslate-separator {
+	color: #ddd;
+	font-size: 12px;
+}
+
+.cotranslate-lang-code {
+	font-size: 12px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+/* ===== FLAGS ===== */
+.cotranslate-flags {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+}
+
+.cotranslate-flag-link {
+	font-size: 24px;
+	text-decoration: none;
+	opacity: 0.7;
+	transition: opacity 0.2s, transform 0.2s;
+}
+
+.cotranslate-flag-link:hover {
+	opacity: 1;
+	transform: scale(1.1);
+}
+
+.cotranslate-flag-link.cotranslate-active {
+	opacity: 1;
+}
+
+.cotranslate-flag-large {
+	font-size: 24px;
+}
+
+/* ===== LIST ===== */
+.cotranslate-list {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+
+.cotranslate-list li {
+	margin-bottom: 4px;
+}
+
+.cotranslate-list-link {
+	display: flex;
+	align-items: center;
+	padding: 6px 12px;
+	color: #333;
+	text-decoration: none;
+	border-radius: 4px;
+	transition: background 0.15s;
+}
+
+.cotranslate-list-link:hover {
+	background: #f5f5f5;
+	text-decoration: none;
+	color: #333;
+}
+
+.cotranslate-list-link.cotranslate-active {
+	background: #f0f6fc;
+	font-weight: 600;
+	color: #0073aa;
+}
+
+/* ===== FLOATING ===== */
+.cotranslate-floating {
+	position: fixed;
+	z-index: 99999;
+}
+
+.cotranslate-floating-bottom-right {
+	bottom: 20px;
+	right: 20px;
+}
+
+.cotranslate-floating-bottom-left {
+	bottom: 20px;
+	left: 20px;
+}
+
+.cotranslate-floating-top-right {
+	top: 20px;
+	right: 20px;
+}
+
+.cotranslate-floating-top-left {
+	top: 20px;
+	left: 20px;
+}
+
+.cotranslate-floating .cotranslate-dropdown-toggle {
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Flytande position top — dropdown öppnas nedåt (redan default) */
+/* Flytande position bottom — dropdown öppnas uppåt */
+.cotranslate-floating-bottom-right .cotranslate-dropdown-menu,
+.cotranslate-floating-bottom-left .cotranslate-dropdown-menu {
+	top: auto;
+	bottom: 100%;
+	margin-top: 0;
+	margin-bottom: 4px;
+}
+
+/* ===== MENY-INTEGRATION ===== */
+.cotranslate-menu-switcher {
+	position: relative;
+}
+
+/* ===== RESPONSIV ===== */
+@media (max-width: 480px) {
+	.cotranslate-dropdown-toggle {
+		padding: 6px 10px;
+		font-size: 13px;
+	}
+
+	/* Dölj bara språknamn i toggle-knappen, inte i dropdown-menyn */
+	.cotranslate-dropdown-toggle .cotranslate-lang-name {
+		display: none;
+	}
+
+	/* Visa alltid språknamn i dropdown-menyn */
+	.cotranslate-dropdown-menu .cotranslate-lang-name {
+		display: inline;
+	}
+
+	/* Compact: visa bara flaggor + kod */
+	.cotranslate-compact .cotranslate-lang-name {
+		display: none;
+	}
+
+	.cotranslate-floating {
+		bottom: 10px !important;
+		right: 10px !important;
+		left: auto !important;
+		top: auto !important;
+	}
+
+	/* Ge dropdown-menyn lite mer plats på mobil */
+	.cotranslate-dropdown-menu {
+		min-width: 140px;
+	}
+}
+
+/* ===== DARK MODE ===== */
+@media (prefers-color-scheme: dark) {
+	.cotranslate-dropdown-toggle {
+		background: #2d2d2d;
+		border-color: #444;
+		color: #e0e0e0;
+	}
+
+	.cotranslate-dropdown-menu {
+		background: #2d2d2d;
+		border-color: #444;
+	}
+
+	.cotranslate-lang-option {
+		color: #e0e0e0;
+	}
+
+	.cotranslate-lang-option:hover {
+		background: #3d3d3d;
+		color: #e0e0e0;
+	}
+
+	.cotranslate-lang-option.cotranslate-active {
+		background: #1a3a5c;
+		color: #64b5f6;
+	}
+}

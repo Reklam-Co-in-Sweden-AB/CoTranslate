@@ -1,0 +1,222 @@
+/**
+ * CoTranslate frontend-editor
+ */
+
+/* Edit-knapp (toggle) */
+#cotranslate-editor-toggle {
+	position: fixed;
+	bottom: 20px;
+	left: 20px;
+	z-index: 99998;
+}
+
+#cotranslate-edit-mode-btn {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 16px;
+	background: #0073aa;
+	color: #fff;
+	border: none;
+	border-radius: 8px;
+	cursor: pointer;
+	font-size: 14px;
+	font-weight: 500;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+	transition: background 0.2s, transform 0.1s;
+}
+
+#cotranslate-edit-mode-btn:hover {
+	background: #005a87;
+}
+
+#cotranslate-edit-mode-btn.active {
+	background: #dc3232;
+}
+
+#cotranslate-edit-mode-btn.active:hover {
+	background: #b32d2d;
+}
+
+.cotranslate-edit-icon {
+	font-size: 16px;
+}
+
+/* Edit-mode: redigeringsbara element */
+.cotranslate-editable {
+	outline: 2px dashed transparent;
+	cursor: pointer;
+	transition: outline-color 0.15s;
+	position: relative;
+}
+
+.cotranslate-editable:hover {
+	outline-color: #0073aa;
+}
+
+.cotranslate-editable.cotranslate-manual {
+	outline-color: #e65100;
+	outline-style: solid;
+}
+
+/* Modal */
+#cotranslate-editor-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 999999;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.cotranslate-editor-modal-content {
+	background: #fff;
+	padding: 30px;
+	border-radius: 12px;
+	max-width: 600px;
+	width: 90%;
+	max-height: 80vh;
+	overflow-y: auto;
+	position: relative;
+	box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+.cotranslate-editor-close {
+	position: absolute;
+	top: 12px;
+	right: 16px;
+	background: none;
+	border: none;
+	font-size: 28px;
+	cursor: pointer;
+	color: #666;
+	line-height: 1;
+}
+
+.cotranslate-editor-close:hover {
+	color: #000;
+}
+
+#cotranslate-editor-modal-title {
+	margin: 0 0 20px 0;
+	font-size: 18px;
+	color: #333;
+}
+
+/* Fält */
+.cotranslate-editor-field {
+	margin-bottom: 16px;
+}
+
+.cotranslate-editor-field label {
+	display: block;
+	margin-bottom: 6px;
+	font-weight: 600;
+	font-size: 13px;
+	color: #555;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.cotranslate-editor-readonly {
+	padding: 10px 14px;
+	background: #f8f8f8;
+	border: 1px solid #e0e0e0;
+	border-radius: 6px;
+	color: #666;
+	font-size: 14px;
+	line-height: 1.5;
+	min-height: 40px;
+}
+
+#cotranslate-editor-translation {
+	width: 100%;
+	padding: 10px 14px;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	font-size: 14px;
+	line-height: 1.5;
+	font-family: inherit;
+	resize: vertical;
+	transition: border-color 0.2s;
+	box-sizing: border-box;
+}
+
+#cotranslate-editor-translation:focus {
+	outline: none;
+	border-color: #0073aa;
+	box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.2);
+}
+
+/* Knappar */
+.cotranslate-editor-actions {
+	display: flex;
+	gap: 10px;
+	margin-top: 20px;
+}
+
+.cotranslate-btn-primary {
+	padding: 10px 20px;
+	background: #0073aa;
+	color: #fff;
+	border: none;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 14px;
+	font-weight: 500;
+	transition: background 0.2s;
+}
+
+.cotranslate-btn-primary:hover {
+	background: #005a87;
+}
+
+.cotranslate-btn-secondary {
+	padding: 10px 20px;
+	background: #f0f0f0;
+	color: #333;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	cursor: pointer;
+	font-size: 14px;
+	transition: background 0.2s;
+}
+
+.cotranslate-btn-secondary:hover {
+	background: #e0e0e0;
+}
+
+/* Status */
+#cotranslate-editor-status {
+	margin-top: 12px;
+	font-size: 13px;
+}
+
+.cotranslate-editor-success {
+	color: #2e7d32;
+}
+
+.cotranslate-editor-error {
+	color: #c62828;
+}
+
+/* Responsiv */
+@media (max-width: 480px) {
+	.cotranslate-editor-modal-content {
+		padding: 20px;
+		margin: 10px;
+		max-height: 90vh;
+	}
+
+	.cotranslate-editor-actions {
+		flex-direction: column;
+	}
+
+	.cotranslate-edit-label {
+		display: none;
+	}
+}

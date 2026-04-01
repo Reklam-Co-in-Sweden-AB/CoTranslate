@@ -1,0 +1,172 @@
+/**
+ * CoTranslate admin-stilar
+ */
+
+.cotranslate-admin {
+	max-width: 1200px;
+}
+
+/* Flikar */
+.cotranslate-tabs {
+	margin: 20px 0;
+	border-bottom: 1px solid #ccc;
+}
+
+.cotranslate-tab {
+	background: none;
+	border: 1px solid transparent;
+	border-bottom: none;
+	padding: 10px 20px;
+	cursor: pointer;
+	font-size: 14px;
+	margin-bottom: -1px;
+}
+
+.cotranslate-tab.active {
+	background: #fff;
+	border-color: #ccc;
+	border-bottom-color: #fff;
+	font-weight: 600;
+}
+
+.cotranslate-tab-content {
+	display: none;
+	padding: 20px 0;
+}
+
+.cotranslate-tab-content.active {
+	display: block;
+}
+
+/* Statusbadges */
+.cotranslate-status {
+	display: inline-block;
+	padding: 2px 8px;
+	border-radius: 3px;
+	font-size: 12px;
+	font-weight: 500;
+}
+
+.cotranslate-status-auto {
+	background: #e7f5e7;
+	color: #2e7d32;
+}
+
+.cotranslate-status-manual {
+	background: #e3f2fd;
+	color: #1565c0;
+}
+
+.cotranslate-status-pending {
+	background: #fff3e0;
+	color: #e65100;
+}
+
+.cotranslate-status-error {
+	background: #fce4ec;
+	color: #c62828;
+}
+
+/* Filter */
+.cotranslate-filters {
+	margin: 15px 0;
+}
+
+.cotranslate-filters select {
+	margin-right: 8px;
+}
+
+/* Modal */
+.cotranslate-modal {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	background: rgba(0, 0, 0, 0.5);
+	z-index: 100000;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.cotranslate-modal-content {
+	background: #fff;
+	padding: 30px;
+	border-radius: 8px;
+	max-width: 800px;
+	width: 90%;
+	max-height: 80vh;
+	overflow-y: auto;
+	position: relative;
+}
+
+.cotranslate-modal-close {
+	position: absolute;
+	top: 10px;
+	right: 15px;
+	font-size: 24px;
+	cursor: pointer;
+	color: #666;
+}
+
+.cotranslate-modal-close:hover {
+	color: #000;
+}
+
+/* Domänmappning */
+.cotranslate-domain-row {
+	display: flex;
+	gap: 10px;
+	margin-bottom: 8px;
+	align-items: center;
+}
+
+.cotranslate-domain-row input {
+	flex: 1;
+}
+
+/* API-status */
+#cotranslate-api-status {
+	margin-top: 10px;
+}
+
+.cotranslate-success {
+	color: #2e7d32;
+	font-weight: 500;
+}
+
+.cotranslate-error {
+	color: #c62828;
+	font-weight: 500;
+}
+
+.cotranslate-loading {
+	color: #666;
+	font-style: italic;
+}
+
+/* Användningsbar */
+.cotranslate-usage-bar {
+	width: 100%;
+	height: 24px;
+	background: #e0e0e0;
+	border-radius: 4px;
+	overflow: hidden;
+	margin: 10px 0;
+}
+
+.cotranslate-usage-fill {
+	height: 100%;
+	background: #29a166;
+	transition: width 0.3s ease;
+	border-radius: 4px;
+}
+
+.cotranslate-usage-fill.warning {
+	background: #f7c433;
+}
+
+.cotranslate-usage-fill.danger {
+	background: #ed7354;
+}
