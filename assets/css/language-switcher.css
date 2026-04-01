@@ -69,6 +69,13 @@
 	z-index: 9999;
 }
 
+/* Floating till höger: meny öppnas åt vänster */
+.cotranslate-floating-bottom-right .cotranslate-dropdown-menu,
+.cotranslate-floating-top-right .cotranslate-dropdown-menu {
+	left: auto;
+	right: 0;
+}
+
 .cotranslate-dropdown[data-open="true"] .cotranslate-dropdown-menu {
 	display: block;
 }
@@ -269,9 +276,12 @@
 		top: auto !important;
 	}
 
-	/* Ge dropdown-menyn lite mer plats på mobil */
+	/* Menyn öppnas alltid åt vänster på mobil */
 	.cotranslate-dropdown-menu {
 		min-width: 140px;
+		left: auto;
+		right: 0;
+		max-width: calc(100vw - 30px);
 	}
 }
 
