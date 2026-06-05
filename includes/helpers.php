@@ -108,18 +108,21 @@ function cotranslate_save_api_key( $api_key ) {
 /**
  * Avgör om DeepL Free eller Pro används.
  *
- * Free-nycklar slutar med :fx.
+ * Typen avgörs alltid utifrån nyckelns format: Free-nycklar slutar med :fx,
+ * allt annat är Pro. Detta är samma detektion som testanslutningen använder
+ * och garanterar att översättningsanropen träffar rätt endpoint.
  *
  * @return string 'free' eller 'pro'.
  */
 function cotranslate_get_api_type() {
 	$key = cotranslate_get_api_key();
 
-	if ( ! empty( $key ) && substr( $key, -3 ) === ':fx' ) {
-		return 'free';
+	// Utan nyckel: behåll sparad/standardtyp (påverkar bara UI, inte anrop).
+	if ( empty( $key ) ) {
+		return get_option( 'cotranslate_deepl_api_type', 'free' );
 	}
 
-	return get_option( 'cotranslate_deepl_api_type', 'free' );
+	return substr( $key, -3 ) === ':fx' ? 'free' : 'pro';
 }
 
 /**

@@ -1641,6 +1641,7 @@ class CoTranslate_Admin {
 		$default_language  = cotranslate_get_default_language();
 		$translated        = 0;
 		$errors            = 0;
+		$last_error        = '';
 
 		foreach ( $enabled_languages as $language ) {
 			if ( $language === $default_language ) {
@@ -1669,7 +1670,8 @@ class CoTranslate_Admin {
 				$result = $this->api->translate_text( $texts, $default_language, $language );
 
 				if ( is_wp_error( $result ) ) {
-					$errors += count( $chunk );
+					$errors    += count( $chunk );
+					$last_error = $result->get_error_message();
 					continue;
 				}
 
@@ -1687,10 +1689,16 @@ class CoTranslate_Admin {
 			}
 		}
 
+		$message = sprintf( '%d strängar översatta, %d fel.', $translated, $errors );
+		if ( $errors > 0 && '' !== $last_error ) {
+			$message .= ' Senaste fel: ' . $last_error;
+		}
+
 		wp_send_json_success( array(
-			'message'    => sprintf( '%d strängar översatta, %d fel.', $translated, $errors ),
+			'message'    => $message,
 			'translated' => $translated,
 			'errors'     => $errors,
+			'last_error' => $last_error,
 		) );
 	}
 
