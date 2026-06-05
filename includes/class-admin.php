@@ -153,6 +153,7 @@ class CoTranslate_Admin {
 		$frontend_editor    = get_option( 'cotranslate_enable_frontend_editor', false );
 		$floating_switcher  = get_option( 'cotranslate_show_floating_switcher', true );
 		$floating_position  = get_option( 'cotranslate_floating_position', 'bottom-right' );
+		$floating_style     = get_option( 'cotranslate_floating_style', 'dropdown' );
 		$auto_detect        = get_option( 'cotranslate_auto_detect_language', false );
 		$domain_map         = get_option( 'cotranslate_domain_language_map', array() );
 		$delete_on_uninstall = get_option( 'cotranslate_delete_data_on_uninstall', false );
@@ -317,6 +318,14 @@ class CoTranslate_Admin {
 								Visa flytande språkväljare
 							</label>
 							<br /><br />
+							<label for="cotranslate-floating-style" style="display:block;margin-bottom:4px;font-weight:600;">Stil</label>
+							<select id="cotranslate-floating-style">
+								<option value="dropdown" <?php selected( $floating_style, 'dropdown' ); ?>>Dropdown (pill)</option>
+								<option value="compact" <?php selected( $floating_style, 'compact' ); ?>>Text (minimalistisk)</option>
+								<option value="flags" <?php selected( $floating_style, 'flags' ); ?>>Flaggor</option>
+							</select>
+							<br /><br />
+							<label for="cotranslate-floating-position" style="display:block;margin-bottom:4px;font-weight:600;">Position</label>
 							<select id="cotranslate-floating-position">
 								<option value="bottom-right" <?php selected( $floating_position, 'bottom-right' ); ?>>Nere till höger</option>
 								<option value="bottom-left" <?php selected( $floating_position, 'bottom-left' ); ?>>Nere till vänster</option>
@@ -1097,6 +1106,15 @@ class CoTranslate_Admin {
 
 		if ( isset( $_POST['floating_position'] ) ) {
 			update_option( 'cotranslate_floating_position', sanitize_key( $_POST['floating_position'] ) );
+		}
+
+		if ( isset( $_POST['floating_style'] ) ) {
+			// Tillåt bara de tre stödda stilarna
+			$style = sanitize_key( $_POST['floating_style'] );
+			if ( ! in_array( $style, array( 'dropdown', 'compact', 'flags' ), true ) ) {
+				$style = 'dropdown';
+			}
+			update_option( 'cotranslate_floating_style', $style );
 		}
 
 		// Domänmappning

@@ -83,9 +83,10 @@ class CoTranslate_Language_Switcher {
 		}
 
 		$position = get_option( 'cotranslate_floating_position', 'bottom-right' );
+		$style    = get_option( 'cotranslate_floating_style', 'dropdown' );
 
 		echo '<div class="cotranslate-floating cotranslate-floating-' . esc_attr( $position ) . '" translate="no">';
-		echo $this->render( 'dropdown' ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
+		echo $this->render( $style ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 		echo '</div>';
 	}
 

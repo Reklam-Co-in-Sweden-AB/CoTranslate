@@ -142,6 +142,7 @@
 			frontend_editor: $('#cotranslate-frontend-editor').is(':checked') ? 1 : 0,
 			floating_switcher: $('#cotranslate-floating-switcher').is(':checked') ? 1 : 0,
 			floating_position: $('#cotranslate-floating-position').val(),
+			floating_style: $('#cotranslate-floating-style').val(),
 			auto_detect: $('#cotranslate-auto-detect').is(':checked') ? 1 : 0,
 			delete_on_uninstall: $('#cotranslate-delete-on-uninstall').is(':checked') ? 1 : 0,
 			domain_map: domainMap
