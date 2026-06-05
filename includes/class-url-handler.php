@@ -101,6 +101,10 @@ class CoTranslate_URL_Handler {
 		$home_url         = rtrim( $this->get_raw_home_url(), '/' );
 		$default_language = $this->get_default_language();
 
+		// Normalisera bort dubbla snedstreck i path-delen (bevara protokollets //).
+		// Skyddar mot t.ex. home_url med avslutande slash som ger 'site.com//en/...'.
+		$url = preg_replace( '#([^:])//+#', '$1/', $url );
+
 		// Ta bort eventuellt befintligt språkprefix
 		$clean_url = $this->strip_language_prefix( $url );
 
@@ -125,10 +129,6 @@ class CoTranslate_URL_Handler {
 
 		// Bygg ny URL: home + /språk + /path
 		$new_url = $home_url . '/' . $language . $path;
-
-		// Undvik dubbla snedstreck (utom i protocol)
-		$new_url = preg_replace( '#(?<!:)//+#', '/', $new_url );
-		$new_url = str_replace( ':/', '://', $new_url );
 
 		if ( ! empty( $parsed['query'] ) ) {
 			$new_url .= '?' . $parsed['query'];
@@ -214,19 +214,14 @@ class CoTranslate_URL_Handler {
 		$enabled_languages = $this->get_enabled_languages();
 		$home_url          = rtrim( $this->get_raw_home_url(), '/' );
 
-		// Matcha ALLA aktiverade språk direkt efter home_url
+		// Matcha /språk direkt efter domänen, följt av / eller slutet på URL:en.
+		// Regex-baserat för att tåla både home_url/lang/rest och home_url/lang.
 		foreach ( $enabled_languages as $lang ) {
-			$prefix = $home_url . '/' . $lang . '/';
-			$exact  = $home_url . '/' . $lang;
+			$pattern = '#^(' . preg_quote( $home_url, '#' ) . ')/' . preg_quote( $lang, '#' ) . '(/|$)#';
 
-			if ( strpos( $url, $prefix ) === 0 ) {
-				// home_url/lang/rest... → home_url/rest...
-				$url = $home_url . '/' . substr( $url, strlen( $prefix ) );
-				break;
-			} elseif ( $url === $exact || $url === $exact . '/' ) {
-				// home_url/lang → home_url/
-				$url = $home_url . '/';
-				break;
+			if ( preg_match( $pattern, $url ) ) {
+				// Byt bara ut den matchade prefix-delen mot home_url/.
+				return preg_replace( $pattern, '$1/', $url, 1 );
 			}
 		}
 
