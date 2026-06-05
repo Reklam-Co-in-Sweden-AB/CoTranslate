@@ -4,6 +4,11 @@
 (function ($) {
 	'use strict';
 
+	// Färgväljare (WordPress inbyggda Iris) — tom = ärv sajtens färger
+	if ($.fn.wpColorPicker) {
+		$('.cotranslate-color-field').wpColorPicker();
+	}
+
 	// Flikar
 	$(document).on('click', '.cotranslate-tab', function () {
 		var tab = $(this).data('tab');
@@ -143,6 +148,8 @@
 			floating_switcher: $('#cotranslate-floating-switcher').is(':checked') ? 1 : 0,
 			floating_position: $('#cotranslate-floating-position').val(),
 			floating_style: $('#cotranslate-floating-style').val(),
+			switcher_bg_color: $('#cotranslate-bg-color').val(),
+			switcher_text_color: $('#cotranslate-text-color').val(),
 			auto_detect: $('#cotranslate-auto-detect').is(':checked') ? 1 : 0,
 			delete_on_uninstall: $('#cotranslate-delete-on-uninstall').is(':checked') ? 1 : 0,
 			domain_map: domainMap

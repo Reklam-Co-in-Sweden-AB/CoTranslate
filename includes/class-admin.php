@@ -109,6 +109,9 @@ class CoTranslate_Admin {
 			return;
 		}
 
+		// WordPress inbyggda färgväljare (Iris)
+		wp_enqueue_style( 'wp-color-picker' );
+
 		wp_enqueue_style(
 			'cotranslate-admin',
 			COTRANSLATE_PLUGIN_URL . 'assets/css/admin.css',
@@ -119,7 +122,7 @@ class CoTranslate_Admin {
 		wp_enqueue_script(
 			'cotranslate-admin',
 			COTRANSLATE_PLUGIN_URL . 'assets/js/admin.js',
-			array( 'jquery' ),
+			array( 'jquery', 'wp-color-picker' ),
 			COTRANSLATE_VERSION,
 			true
 		);
@@ -154,6 +157,8 @@ class CoTranslate_Admin {
 		$floating_switcher  = get_option( 'cotranslate_show_floating_switcher', true );
 		$floating_position  = get_option( 'cotranslate_floating_position', 'bottom-right' );
 		$floating_style     = get_option( 'cotranslate_floating_style', 'dropdown' );
+		$switcher_bg_color  = get_option( 'cotranslate_switcher_bg_color', '' );
+		$switcher_text_color = get_option( 'cotranslate_switcher_text_color', '' );
 		$auto_detect        = get_option( 'cotranslate_auto_detect_language', false );
 		$domain_map         = get_option( 'cotranslate_domain_language_map', array() );
 		$delete_on_uninstall = get_option( 'cotranslate_delete_data_on_uninstall', false );
@@ -332,6 +337,15 @@ class CoTranslate_Admin {
 								<option value="top-right" <?php selected( $floating_position, 'top-right' ); ?>>Uppe till höger</option>
 								<option value="top-left" <?php selected( $floating_position, 'top-left' ); ?>>Uppe till vänster</option>
 							</select>
+							<br /><br />
+							<label for="cotranslate-bg-color" style="display:block;margin-bottom:4px;font-weight:600;">Bakgrundsfärg</label>
+							<input type="text" id="cotranslate-bg-color" class="cotranslate-color-field"
+								value="<?php echo esc_attr( $switcher_bg_color ); ?>" data-default-color="" />
+							<br /><br />
+							<label for="cotranslate-text-color" style="display:block;margin-bottom:4px;font-weight:600;">Textfärg</label>
+							<input type="text" id="cotranslate-text-color" class="cotranslate-color-field"
+								value="<?php echo esc_attr( $switcher_text_color ); ?>" data-default-color="" />
+							<p class="description">Lämna tomt för att ärva sajtens färger (standard).</p>
 						</td>
 					</tr>
 					<tr>
@@ -1115,6 +1129,15 @@ class CoTranslate_Admin {
 				$style = 'dropdown';
 			}
 			update_option( 'cotranslate_floating_style', $style );
+		}
+
+		// Färger — tom sträng vid ogiltigt/tomt värde (= ärv sajtens färger)
+		if ( isset( $_POST['switcher_bg_color'] ) ) {
+			update_option( 'cotranslate_switcher_bg_color', cotranslate_sanitize_hex_color( wp_unslash( $_POST['switcher_bg_color'] ) ) );
+		}
+
+		if ( isset( $_POST['switcher_text_color'] ) ) {
+			update_option( 'cotranslate_switcher_text_color', cotranslate_sanitize_hex_color( wp_unslash( $_POST['switcher_text_color'] ) ) );
 		}
 
 		// Domänmappning

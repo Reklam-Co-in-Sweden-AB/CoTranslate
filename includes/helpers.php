@@ -106,6 +106,29 @@ function cotranslate_save_api_key( $api_key ) {
 }
 
 /**
+ * Sanera en hex-färg (#rgb eller #rrggbb).
+ *
+ * Egen variant som fungerar både i admin och på frontend — WordPress egna
+ * sanitize_hex_color() är inte garanterat laddad utanför admin/customizer.
+ *
+ * @param string $color Färgvärde att validera.
+ * @return string Giltig hex-färg med # eller tom sträng (= ärv).
+ */
+function cotranslate_sanitize_hex_color( $color ) {
+	$color = trim( (string) $color );
+
+	if ( '' === $color ) {
+		return '';
+	}
+
+	if ( preg_match( '/^#([A-Fa-f0-9]{3}|[A-Fa-f0-9]{6})$/', $color ) ) {
+		return $color;
+	}
+
+	return '';
+}
+
+/**
  * Avgör om DeepL Free eller Pro används.
  *
  * Typen avgörs alltid utifrån nyckelns format: Free-nycklar slutar med :fx,

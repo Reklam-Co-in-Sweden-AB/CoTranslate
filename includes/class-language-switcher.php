@@ -57,6 +57,27 @@ class CoTranslate_Language_Switcher {
 			COTRANSLATE_VERSION,
 			true
 		);
+
+		// Anpassade färger → CSS-variabler på .cotranslate-switcher.
+		// Variablerna ärvs ner till alla stilar (även floating och dark mode),
+		// så de slår igenom utan att vi behöver !important.
+		$bg_color   = cotranslate_sanitize_hex_color( get_option( 'cotranslate_switcher_bg_color', '' ) );
+		$text_color = cotranslate_sanitize_hex_color( get_option( 'cotranslate_switcher_text_color', '' ) );
+
+		$vars = '';
+		if ( ! empty( $bg_color ) ) {
+			$vars .= '--cotranslate-bg:' . $bg_color . ';';
+		}
+		if ( ! empty( $text_color ) ) {
+			$vars .= '--cotranslate-text:' . $text_color . ';';
+		}
+
+		if ( '' !== $vars ) {
+			wp_add_inline_style(
+				'cotranslate-language-switcher',
+				'.cotranslate-switcher{' . $vars . '}'
+			);
+		}
 	}
 
 	/**
