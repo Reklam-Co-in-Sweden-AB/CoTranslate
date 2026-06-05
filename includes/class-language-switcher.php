@@ -37,45 +37,6 @@ class CoTranslate_Language_Switcher {
 
 		// Registrera widget
 		add_action( 'widgets_init', array( $this, 'register_widget' ) );
-
-		// Tillfällig diagnostik: ?cotranslate_diag=1 (endast för admin)
-		if ( isset( $_GET['cotranslate_diag'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification
-			add_action( 'wp_footer', array( $this, 'render_diagnostics' ), 999 );
-		}
-	}
-
-	/**
-	 * Tillfällig diagnostik — skriver ut körtidsvärden som HTML-kommentar.
-	 *
-	 * Anropas bara med ?cotranslate_diag=1 och för inloggad admin. Hjälper
-	 * att se exakt vilka värden get_url_for_language() får på servern.
-	 */
-	public function render_diagnostics() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
-
-		$raw_home    = get_option( 'home' );
-		$request_uri = $this->url_handler->get_original_request_uri();
-		$current_url = $raw_home . $request_uri;
-		$default     = cotranslate_get_default_language();
-		$sv_url      = $this->url_handler->get_url_for_language( $current_url, $default );
-
-		$lines = array(
-			'COTRANSLATE_DIAG MARKER=v3.0.1-diag',
-			'home=' . $raw_home,
-			'siteurl=' . get_option( 'siteurl' ),
-			'default_language=' . $default,
-			'enabled=' . implode( ',', cotranslate_get_enabled_languages() ),
-			'original_request_uri=' . $request_uri,
-			'current_url=' . $current_url,
-			'default_lang_url=' . $sv_url,
-		);
-
-		// Ta bort ev. -- som skulle bryta HTML-kommentaren
-		$out = str_replace( '--', '__', implode( "\n", $lines ) );
-
-		echo "\n<!--\n" . esc_html( $out ) . "\n-->\n"; // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped
 	}
 
 	/**
