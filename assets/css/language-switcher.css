@@ -297,36 +297,7 @@
 	}
 }
 
-/* ===== DARK MODE ===== */
-@media (prefers-color-scheme: dark) {
-	.cotranslate-dropdown-toggle {
-		border-color: rgba(255, 255, 255, 0.18);
-	}
-
-	.cotranslate-dropdown-toggle:hover {
-		border-color: rgba(255, 255, 255, 0.4);
-	}
-
-	.cotranslate-dropdown-menu {
-		background: var(--cotranslate-bg, #1f1f1f);
-		border-color: rgba(255, 255, 255, 0.12);
-		box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
-	}
-
-	.cotranslate-lang-option:hover,
-	.cotranslate-list-link:hover {
-		background: rgba(255, 255, 255, 0.07);
-	}
-
-	/* Flytande fäste i mörkt läge */
-	.cotranslate-floating .cotranslate-dropdown-toggle,
-	.cotranslate-floating .cotranslate-compact,
-	.cotranslate-floating .cotranslate-flags {
-		background: var(--cotranslate-bg, #1f1f1f);
-		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
-	}
-
-	.cotranslate-floating .cotranslate-dropdown-toggle {
-		border-color: rgba(255, 255, 255, 0.12);
-	}
-}
+/*
+ * Inget automatiskt mörkt läge (prefers-color-scheme): väljaren ska följa de
+ * valda färgerna eller den rena ljusa standarden — inte gissa utifrån OS:et.
+ */
