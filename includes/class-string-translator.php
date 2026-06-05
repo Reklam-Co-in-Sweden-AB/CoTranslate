@@ -332,6 +332,27 @@ class CoTranslate_String_Translator {
 		$escaped           = preg_quote( $home_url, '#' );
 		$enabled_languages = cotranslate_get_enabled_languages();
 
+		// Skydda länkar som MEDVETET pekar på ett visst språk (språkväljare och
+		// SEO:s hreflang/canonical). Dessa har redan rätt mål och får INTE ett
+		// språkprefix påklistrat — annars hamnar t.ex. huvudspråkets länk fel.
+		$protected = array();
+		$prot_idx  = 0;
+		$protect   = function ( $regex ) use ( &$html, &$protected, &$prot_idx ) {
+			$html = preg_replace_callback(
+				$regex,
+				function ( $m ) use ( &$protected, &$prot_idx ) {
+					$key               = '<!--COTRANSLATE_NOURL_' . $prot_idx . '-->';
+					$protected[ $key ] = $m[0];
+					$prot_idx++;
+					return $key;
+				},
+				$html
+			);
+		};
+		// <a ...> och <link ...> med hreflang, samt <link rel="canonical">
+		$protect( '#<(?:a|link)\b[^>]*\bhreflang\s*=\s*["\'][^"\']*["\'][^>]*>#i' );
+		$protect( '#<link\b[^>]*\brel\s*=\s*["\']?canonical["\']?[^>]*>#i' );
+
 		// Bygg negative lookahead som skippar ALLA språkprefix (inte bara aktuellt)
 		$lang_patterns = array();
 		foreach ( $enabled_languages as $lang ) {
@@ -360,6 +381,11 @@ class CoTranslate_String_Translator {
 			},
 			$html
 		);
+
+		// Återställ de skyddade språk-/hreflang-länkarna
+		if ( ! empty( $protected ) ) {
+			$html = str_replace( array_keys( $protected ), array_values( $protected ), $html );
+		}
 
 		return $html;
 	}
