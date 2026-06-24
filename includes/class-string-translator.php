@@ -169,7 +169,15 @@ class CoTranslate_String_Translator {
 			$html
 		);
 
-		// Steg 2: Ersätt BARA text mellan HTML-taggar (>text<), inte inne i attribut
+		// Steg 2: Ersätt BARA text mellan HTML-taggar (>text<), inte inne i attribut.
+		//
+		// Matcha på HELA textnoden (trimmad), inte som delsträng. Tidigare
+		// kördes strtr() här, vilket ersatte korta källsträngar var som helst
+		// inuti längre ord och korrumperade texten — t.ex. "Vad" => "What is"
+		// gjorde "Vadstena" till "What isstena", och "av" => "of" gjorde "have"
+		// till "hofe". Ordlistan består alltid av hela textnoder (se
+		// collect_untranslated_strings), så exakt hel-nod-matchning är korrekt
+		// och konsekvent med övriga översättningsmetoder i klassen.
 		$html = preg_replace_callback(
 			'#(>)([^<]+)(<)#',
 			function ( $matches ) use ( $replacements ) {
@@ -180,10 +188,22 @@ class CoTranslate_String_Translator {
 					return $matches[0];
 				}
 
-				// Kör strtr bara på textinnehållet
-				$translated = strtr( $text, $replacements );
+				// Dela upp i ledande whitespace + kärna + avslutande whitespace
+				// så att omgivande blanksteg/radbrytningar bevaras exakt.
+				preg_match( '/^(\s*)(.*?)(\s*)$/su', $text, $ws );
+				$core    = $ws[2];
+				$decoded = html_entity_decode( $core, ENT_QUOTES, 'UTF-8' );
 
-				return $matches[1] . $translated . $matches[3];
+				// Exakt matchning mot ordlistan (avkodad eller rå).
+				if ( isset( $replacements[ $decoded ] ) ) {
+					$translated = $replacements[ $decoded ];
+				} elseif ( isset( $replacements[ $core ] ) ) {
+					$translated = $replacements[ $core ];
+				} else {
+					return $matches[0];
+				}
+
+				return $matches[1] . $ws[1] . esc_html( $translated ) . $ws[3] . $matches[3];
 			},
 			$html
 		);
