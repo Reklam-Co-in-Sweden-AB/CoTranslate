@@ -283,6 +283,8 @@ class CoTranslate_Claude_API {
 			$prompt .= " The text contains HTML markup — preserve all HTML tags exactly as they are, only translate the visible text content.";
 		}
 
+		$prompt .= " Any HTML comment of the form <!--COTRANSLATE_NT_0--> is a protected placeholder — copy it verbatim into the output and never translate, alter, remove or reorder it.";
+
 		$prompt .= " Output ONLY the translation, nothing else. No explanations, no quotes, no labels.";
 
 		if ( ! empty( $custom_prompt ) ) {
@@ -303,6 +305,7 @@ class CoTranslate_Claude_API {
 		$prompt  = "Translate the following texts from {$source_name} to {$target_name}.\n";
 		$prompt .= "Output a JSON array with the translations in the same order. No explanations.\n";
 		$prompt .= "Example output: [\"translation 1\", \"translation 2\"]\n";
+		$prompt .= "Any HTML comment of the form <!--COTRANSLATE_NT_0--> is a protected placeholder — copy it verbatim into the output and never translate, alter, remove or reorder it.\n";
 
 		if ( ! empty( $custom_prompt ) ) {
 			$prompt .= "\nAdditional instructions: " . $custom_prompt . "\n";
