@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class CoTranslate_DeepL_API {
+class CoTranslate_DeepL_API implements CoTranslate_Translator {
 
 	/**
 	 * Timeout för API-anrop i sekunder.

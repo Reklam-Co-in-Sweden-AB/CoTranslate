@@ -10,7 +10,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class CoTranslate_Claude_API {
+class CoTranslate_Claude_API implements CoTranslate_Translator {
 
 	/**
 	 * Timeout för API-anrop i sekunder.

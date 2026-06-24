@@ -89,6 +89,7 @@ class CoTranslate_Plugin {
 	private function load_includes() {
 		$dir = COTRANSLATE_PLUGIN_DIR . 'includes/';
 
+		require_once $dir . 'interface-translator.php';
 		require_once $dir . 'class-deepl-api.php';
 		require_once $dir . 'class-claude-api.php';
 		require_once $dir . 'class-translator-factory.php';

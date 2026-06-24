@@ -27,7 +27,7 @@ class CoTranslate_Post_Translator {
 	 */
 	private $processing = array();
 
-	public function __construct( CoTranslate_DeepL_API $api, CoTranslate_Translation_Store $store ) {
+	public function __construct( CoTranslate_Translator $api, CoTranslate_Translation_Store $store ) {
 		$this->api   = $api;
 		$this->store = $store;
 	}

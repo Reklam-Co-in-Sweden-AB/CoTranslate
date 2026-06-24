@@ -1,6 +1,7 @@
 <?php
 // Fristående CLI-test för ren protect/restore-logik (ingen WordPress).
 define( 'ABSPATH', __DIR__ . '/' ); // tillåt att klassfilen laddas utanför WP
+require __DIR__ . '/../includes/interface-translator.php';
 require __DIR__ . '/../includes/class-no-translate-wrapper.php';
 
 $fails = 0;

@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-class CoTranslate_No_Translate_Wrapper {
+class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 
 	/** @var object Inre översättningsmotor. */
 	private $inner;

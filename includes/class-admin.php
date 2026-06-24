@@ -26,7 +26,7 @@ class CoTranslate_Admin {
 	 */
 	private $post_translator;
 
-	public function __construct( CoTranslate_DeepL_API $api, CoTranslate_Translation_Store $store, CoTranslate_Post_Translator $post_translator ) {
+	public function __construct( CoTranslate_Translator $api, CoTranslate_Translation_Store $store, CoTranslate_Post_Translator $post_translator ) {
 		$this->api             = $api;
 		$this->store           = $store;
 		$this->post_translator = $post_translator;
