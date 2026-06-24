@@ -99,6 +99,74 @@ class CoTranslate_Admin {
 			'cotranslate-strings',
 			array( $this, 'render_strings_page' )
 		);
+
+		add_submenu_page(
+			'cotranslate',
+			'Översätt inte',
+			'Översätt inte',
+			'manage_options',
+			'cotranslate-no-translate',
+			array( $this, 'render_no_translate_page' )
+		);
+	}
+
+	/**
+	 * Rendera sidan "Översätt inte" — ord/fraser som aldrig översätts.
+	 */
+	public function render_no_translate_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		// Spara vid POST.
+		if ( isset( $_POST['cotranslate_no_translate_nonce'] )
+			&& wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['cotranslate_no_translate_nonce'] ) ), 'cotranslate_save_no_translate' ) ) {
+
+			$raw   = isset( $_POST['cotranslate_nt'] ) && is_array( $_POST['cotranslate_nt'] ) ? wp_unslash( $_POST['cotranslate_nt'] ) : array();
+			$saved = array();
+			foreach ( $raw as $key => $value ) {
+				$key   = sanitize_key( $key );
+				$lines = preg_split( '/\r\n|\r|\n/', (string) $value );
+				$lines = array_filter( array_map( 'sanitize_text_field', array_map( 'trim', $lines ) ) );
+				if ( ! empty( $lines ) ) {
+					$saved[ $key ] = implode( "\n", $lines );
+				}
+			}
+			update_option( 'cotranslate_no_translate_terms', $saved );
+			echo '<div class="notice notice-success"><p>Sparat.</p></div>';
+		}
+
+		$terms             = get_option( 'cotranslate_no_translate_terms', array() );
+		$default_language  = cotranslate_get_default_language();
+		$enabled_languages = cotranslate_get_enabled_languages();
+		$supported         = cotranslate_get_supported_languages();
+		?>
+		<div class="wrap cotranslate-admin">
+			<h1>CoTranslate — Översätt inte</h1>
+			<p>Ord och fraser här lämnas oöversatta. Skriv ett ord eller en fras per rad. Matchningen är skiftlägesokänslig.</p>
+			<form method="post">
+				<?php wp_nonce_field( 'cotranslate_save_no_translate', 'cotranslate_no_translate_nonce' ); ?>
+
+				<h2>Alla språk</h2>
+				<p class="description">Gäller oavsett målspråk (t.ex. varumärken).</p>
+				<textarea name="cotranslate_nt[_all]" rows="6" class="large-text code"><?php echo esc_textarea( $terms['_all'] ?? '' ); ?></textarea>
+
+				<?php
+				foreach ( $enabled_languages as $lang ) :
+					if ( $lang === $default_language ) {
+						continue;
+					}
+					$data  = $supported[ $lang ] ?? array( 'native' => $lang, 'flag' => '' );
+					$label = trim( ( $data['flag'] ?? '' ) . ' ' . ( $data['native'] ?? $lang ) );
+					?>
+					<h2><?php echo esc_html( $label ); ?></h2>
+					<textarea name="cotranslate_nt[<?php echo esc_attr( $lang ); ?>]" rows="4" class="large-text code"><?php echo esc_textarea( $terms[ $lang ] ?? '' ); ?></textarea>
+				<?php endforeach; ?>
+
+				<p><button type="submit" class="button button-primary">Spara</button></p>
+			</form>
+		</div>
+		<?php
 	}
 
 	/**
