@@ -92,6 +92,7 @@ class CoTranslate_Plugin {
 		require_once $dir . 'class-deepl-api.php';
 		require_once $dir . 'class-claude-api.php';
 		require_once $dir . 'class-translator-factory.php';
+		require_once $dir . 'class-no-translate-wrapper.php';
 		require_once $dir . 'class-translation-store.php';
 		require_once $dir . 'class-post-translator.php';
 		require_once $dir . 'class-url-handler.php';

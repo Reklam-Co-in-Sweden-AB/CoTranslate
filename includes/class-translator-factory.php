@@ -36,10 +36,12 @@ class CoTranslate_Translator_Factory {
 		}
 
 		if ( self::ENGINE_CLAUDE === $engine ) {
-			return new CoTranslate_Claude_API();
+			$inner = new CoTranslate_Claude_API();
+		} else {
+			$inner = new CoTranslate_DeepL_API();
 		}
 
-		return new CoTranslate_DeepL_API();
+		return new CoTranslate_No_Translate_Wrapper( $inner );
 	}
 
 	/**
