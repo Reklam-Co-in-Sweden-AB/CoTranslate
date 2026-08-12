@@ -53,5 +53,46 @@ check( '"Hem" → "Home"', strpos( $out, '>Home<' ) !== false, true );
 check( '"Vad" (hel nod) → "What is"', strpos( $out, '>What is<' ) !== false, true );
 check( 'hel fras översätts', strpos( $out, '>Pause for a while<' ) !== false, true );
 
+// --- HTML-kommentarer med litteral tagg i sig ---
+// En kommentar som innehåller t.ex. `<img>` fick tidigare sitt `-->` behandlat
+// som en textnod. Efter esc_html() blev det `--&gt;`, kommentaren blev
+// oavslutad och svalde efterföljande element fram till nästa `-->`.
+$dict->setValue( $obj, array(
+	'(inte CSS-bakgrund) så den kan prioriteras. -->' => '(not a CSS background) so it can be prioritised. -->',
+	'Utforska' => 'Explore',
+) );
+
+$hero = '<div class="hero__video">'
+	. '<!-- Poster som riktig <img> (inte CSS-bakgrund) så den kan prioriteras. -->'
+	. '<img class="hero__poster" src="/p.webp" alt="">'
+	. '<video class="hero__mp4" muted></video>'
+	. '</div>'
+	. '<!-- Overlay --><div class="hero__overlay"></div><span>Utforska</span>';
+
+$out = $method->invoke( $obj, $hero );
+
+check( 'kommentarens "-->" är intakt', strpos( $out, '--&gt;' ) === false, true );
+check( '<img> finns kvar', strpos( $out, 'hero__poster' ) !== false, true );
+check( '<video> finns kvar', strpos( $out, 'hero__mp4' ) !== false, true );
+check( 'div-balansen är oförändrad', substr_count( $out, '</div>' ), substr_count( $hero, '</div>' ) );
+check( 'text utanför kommentaren översätts fortfarande', strpos( $out, '>Explore<' ) !== false, true );
+
+// Kommentarsinnehåll ska inte heller köas som oöversatt sträng.
+$collect = $ref->getMethod( 'collect_untranslated_strings' );
+if ( PHP_VERSION_ID < 80100 ) { $collect->setAccessible( true ); }
+$untranslated = $ref->getProperty( 'untranslated' );
+if ( PHP_VERSION_ID < 80100 ) { $untranslated->setAccessible( true ); }
+$untranslated->setValue( $obj, array() );
+$collect->invoke( $obj, $hero );
+$collected = array_keys( $untranslated->getValue( $obj ) );
+
+$has_comment_junk = false;
+foreach ( $collected as $string ) {
+	if ( strpos( $string, '-->' ) !== false || strpos( $string, 'CSS-bakgrund' ) !== false ) {
+		$has_comment_junk = true;
+	}
+}
+check( 'kommentarstext köas inte för översättning', $has_comment_junk, false );
+
 echo $fails ? "\n$fails test misslyckades\n" : "\nAlla test gröna\n";
 exit( $fails ? 1 : 0 );

@@ -155,11 +155,20 @@ class CoTranslate_String_Translator {
 			return $html;
 		}
 
-		// Steg 1: Ta bort script, style, textarea, code — skydda från ersättning
+		// Steg 1: Ta bort script, style, textarea, code och HTML-kommentarer —
+		// skydda från ersättning.
+		//
+		// Kommentarer MÅSTE skyddas. En kommentar som innehåller en litteral
+		// tagg, t.ex. `<!-- Poster som riktig <img> … -->`, gör att regexet i
+		// steg 2 ser kommentarens slut som en vanlig textnod: `>` kommer från
+		// <img> inuti kommentaren och `<` från nästa riktiga tagg. Då hamnar
+		// även `-->` i textnoden, och esc_html() gör om den till `--&gt;`.
+		// Kommentaren blir oavslutad och sväljer allt fram till nästa `-->`
+		// — i praktiken hela element som <img>, <video> och deras </div>.
 		$protected = array();
 		$counter   = 0;
 		$html = preg_replace_callback(
-			'#(<(?:script|style|textarea|code|noscript|svg)[^>]*>.*?</(?:script|style|textarea|code|noscript|svg)>)#si',
+			'#(<!--.*?-->|<(?:script|style|textarea|code|noscript|svg)[^>]*>.*?</(?:script|style|textarea|code|noscript|svg)>)#si',
 			function ( $matches ) use ( &$protected, &$counter ) {
 				$placeholder = '<!--COTRANSLATE_PROTECTED_' . $counter . '-->';
 				$protected[ $placeholder ] = $matches[0];
@@ -418,6 +427,11 @@ class CoTranslate_String_Translator {
 	private function collect_untranslated_strings( $html ) {
 		// Ta bort script, style, noscript, svg — dessa ska inte översättas
 		$clean = preg_replace( '#<(script|style|noscript|svg)[^>]*>.*?</\1>#si', '', $html );
+
+		// Ta bort HTML-kommentarer. Innehållet i dem är inte synlig text, och
+		// en kommentar med en litteral tagg i sig (t.ex. `<!-- … <img> … -->`)
+		// gör annars att kommentarens `-->` följer med in i ordlistan.
+		$clean = preg_replace( '#<!--.*?-->#s', '', $clean );
 
 		// 1. Extrahera text mellan HTML-taggar (per element)
 		preg_match_all( '#>([^<]+)<#', $clean, $matches );

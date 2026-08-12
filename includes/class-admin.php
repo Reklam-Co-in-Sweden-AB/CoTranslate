@@ -1901,6 +1901,11 @@ class CoTranslate_Admin {
 		// Ta bort script, style, noscript, svg
 		$clean = preg_replace( '#<(script|style|noscript|svg)[^>]*>.*?</\1>#si', '', $html );
 
+		// Ta bort HTML-kommentarer — samma skäl som i String Translator:
+		// en kommentar med en litteral tagg i sig läcker annars in sitt `-->`
+		// i ordlistan och förstör markupen vid ersättning.
+		$clean = preg_replace( '#<!--.*?-->#s', '', $clean );
+
 		// 1. Extrahera text mellan HTML-taggar
 		preg_match_all( '#>([^<]+)<#', $clean, $matches );
 		$candidates = ! empty( $matches[1] ) ? $matches[1] : array();
