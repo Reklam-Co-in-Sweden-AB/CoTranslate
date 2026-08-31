@@ -388,25 +388,48 @@ class CoTranslate_String_Translator {
 			if ( $lang === $default_language ) {
 				continue;
 			}
-			$lang_patterns[] = preg_quote( $lang, '#' ) . '\/';
+			// Matcha både "en/..." och naket "en" följt av citattecken
+			$lang_patterns[] = preg_quote( $lang, '#' ) . '(?:\/|["\'])';
 		}
 		$skip_patterns = array_merge( $lang_patterns, array(
 			'wp-admin', 'wp-content', 'wp-includes', 'wp-json', 'wp-login',
 		) );
 		$skip_regex = implode( '|', $skip_patterns );
 
-		// Matcha href="..." och action="..." som pekar till sajten utan språkprefix
-		$pattern = '#((?:href|action)\s*=\s*["\'])(' . $escaped . ')(\/(?!' . $skip_regex . ')[^"\']*?)(["\'])#i';
+		// Fil-URL:er ska aldrig prefixas (delas av båda mönstren nedan)
+		$file_ext_regex = '/\.(css|js|png|jpg|jpeg|gif|svg|webp|ico|pdf|zip|woff2?)$/i';
+
+		// Matcha href="..." och action="..." som pekar till sajten utan språkprefix.
+		// Path-delen är valfri så att även naken domän utan avslutande snedstreck
+		// (href="https://sajt.se") får prefix.
+		$pattern = '#((?:href|action)\s*=\s*["\'])(' . $escaped . ')((?:\/(?!' . $skip_regex . ')[^"\']*?)?)(["\'])#i';
 
 		$html = preg_replace_callback(
 			$pattern,
-			function ( $matches ) use ( $current_lang ) {
+			function ( $matches ) use ( $current_lang, $file_ext_regex ) {
 				// Hoppa över fil-URL:er
-				if ( preg_match( '/\.(css|js|png|jpg|jpeg|gif|svg|webp|ico|pdf|zip|woff2?)$/i', $matches[3] ) ) {
+				if ( preg_match( $file_ext_regex, $matches[3] ) ) {
 					return $matches[0];
 				}
 
 				return $matches[1] . $matches[2] . '/' . $current_lang . $matches[3] . $matches[4];
+			},
+			$html
+		);
+
+		// Rot-relativa länkar (href="/kontakt/") innehåller inte domänen och
+		// fångas inte av mönstret ovan — prefixas separat. Protokoll-relativa
+		// URL:er (//cdn.se) och paths i skip-listan hoppas över.
+		$rel_pattern = '#((?:href|action)\s*=\s*["\'])\/(?!\/|' . $skip_regex . ')([^"\']*)(["\'])#i';
+
+		$html = preg_replace_callback(
+			$rel_pattern,
+			function ( $matches ) use ( $current_lang, $file_ext_regex ) {
+				if ( preg_match( $file_ext_regex, $matches[2] ) ) {
+					return $matches[0];
+				}
+
+				return $matches[1] . '/' . $current_lang . '/' . $matches[2] . $matches[3];
 			},
 			$html
 		);
