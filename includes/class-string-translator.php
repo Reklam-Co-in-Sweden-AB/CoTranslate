@@ -24,8 +24,17 @@ class CoTranslate_String_Translator {
 
 	/**
 	 * Förladdat dictionary: source_text => translated_text.
+	 * Innehåller BARA färdiga översättningar — rader som väntar på översättning
+	 * (tom translated_text) filtreras bort så att de aldrig ersätter synlig text
+	 * i attribut eller <title> med tom sträng.
 	 */
 	private $dictionary = array();
+
+	/**
+	 * Alla kända källtexter för språket, även de som väntar på översättning.
+	 * Används för att inte köa samma sträng om och om igen.
+	 */
+	private $known = array();
 
 	/**
 	 * Strängar som saknar översättning (för köning).
@@ -79,8 +88,14 @@ class CoTranslate_String_Translator {
 		}
 
 		// Förladda alla strängar för aktuellt språk (en enda DB-query)
-		$language         = cotranslate_get_current_language();
-		$this->dictionary = $this->store->load_all_strings( $language );
+		$language   = cotranslate_get_current_language();
+		$all        = $this->store->load_all_strings( $language );
+		$this->known = $all;
+
+		// Bara färdiga översättningar får användas för ersättning.
+		$this->dictionary = array_filter( $all, function ( $translated ) {
+			return '' !== (string) $translated;
+		} );
 
 		if ( ! empty( $this->dictionary ) || true ) {
 			$this->buffer_active = true;
@@ -502,8 +517,8 @@ class CoTranslate_String_Translator {
 				continue;
 			}
 
-			// Hoppa över om redan i dictionary
-			if ( isset( $this->dictionary[ $text ] ) ) {
+			// Hoppa över om redan känd (översatt eller köad)
+			if ( isset( $this->known[ $text ] ) ) {
 				continue;
 			}
 
