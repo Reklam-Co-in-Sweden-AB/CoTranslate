@@ -216,7 +216,7 @@ class CoTranslate_Admin {
 				}
 
 				// Tabbar måste överleva (Excel-inklistring) — därför inte sanitize_text_field.
-				$raw = wp_strip_all_tags( (string) ( $raw_all[ $lang ] ?? '' ) );
+				$raw = isset( $raw_all[ $lang ] ) && is_string( $raw_all[ $lang ] ) ? wp_strip_all_tags( $raw_all[ $lang ] ) : '';
 				$old = CoTranslate_Glossary::get_entries( $lang );
 				$new = CoTranslate_Glossary::save_raw( $lang, $raw );
 

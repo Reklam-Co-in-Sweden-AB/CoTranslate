@@ -185,7 +185,8 @@ class CoTranslate_Glossary {
 	 */
 	public static function add_entry( $target_lang, $source, $target ) {
 		$entries = self::get_entries( $target_lang );
-		$parsed  = self::parse_lines( $source . ' = ' . $target );
+		// Tab som avgränsare så att ett '=' inuti en term inte splittrar fel.
+		$parsed  = self::parse_lines( $source . "\t" . $target );
 
 		foreach ( $parsed as $s => $t ) {
 			$entries[ $s ] = $t;

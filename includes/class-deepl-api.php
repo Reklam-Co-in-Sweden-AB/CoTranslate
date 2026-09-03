@@ -277,7 +277,10 @@ class CoTranslate_DeepL_API implements CoTranslate_Translator {
 			// Trasig eller borttagen ordlista får aldrig stoppa översättningen:
 			// glöm id:t och gör om anropet en gång utan ordlista.
 			if ( '' !== $glossary_id && in_array( $code, array( 400, 404 ), true ) && false !== stripos( $message, 'glossary' ) ) {
-				CoTranslate_DeepL_Glossary::forget_id( $target_lang, 'DeepL avvisade ordlistan: ' . $message . ' Spara ordlistan igen för att synka om.' );
+				// Glöm bara om id:t inte redan bytts ut av en parallell synk.
+				if ( CoTranslate_DeepL_Glossary::get_id( $target_lang ) === $glossary_id ) {
+					CoTranslate_DeepL_Glossary::forget_id( $target_lang, 'DeepL avvisade ordlistan: ' . $message . ' Spara ordlistan igen för att synka om.' );
+				}
 				return $this->call_api( $texts, $source_lang, $target_lang, $html, false );
 			}
 
