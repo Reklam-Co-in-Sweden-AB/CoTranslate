@@ -3,7 +3,7 @@
  * Plugin Name: CoTranslate
  * Plugin URI: https://coscribe.se/cotranslate
  * Description: Automatisk AI-driven översättning med DeepL API. Översätter sidor, inlägg och WooCommerce-produkter med stöd för manuella överrider.
- * Version: 3.1.4
+ * Version: 3.2.0
  * Author: Coscribe
  * Author URI: https://coscribe.se
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'COTRANSLATE_VERSION', '3.1.4' );
+define( 'COTRANSLATE_VERSION', '3.2.0' );
 define( 'COTRANSLATE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'COTRANSLATE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 define( 'COTRANSLATE_PLUGIN_BASENAME', plugin_basename( __FILE__ ) );
