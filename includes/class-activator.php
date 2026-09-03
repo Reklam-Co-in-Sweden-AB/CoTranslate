@@ -12,7 +12,7 @@ class CoTranslate_Activator {
 	/**
 	 * Databasversion — öka vid schemaändringar.
 	 */
-	const DB_VERSION = '1.0.0';
+	const DB_VERSION = '1.1.0';
 
 	/**
 	 * Körs vid plugin-aktivering.
@@ -87,12 +87,14 @@ class CoTranslate_Activator {
 			translated_text text NOT NULL,
 			context varchar(100) DEFAULT 'general',
 			is_manual tinyint(1) NOT NULL DEFAULT 0,
+			first_seen_post_id bigint(20) unsigned DEFAULT NULL,
 			created_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP,
 			updated_at datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
 			PRIMARY KEY  (id),
 			UNIQUE KEY hash_lang (source_hash, language),
 			KEY language (language),
-			KEY is_manual (is_manual)
+			KEY is_manual (is_manual),
+			KEY first_seen (first_seen_post_id)
 		) {$charset_collate};";
 
 		require_once ABSPATH . 'wp-admin/includes/upgrade.php';

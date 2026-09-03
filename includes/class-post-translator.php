@@ -140,7 +140,7 @@ class CoTranslate_Post_Translator {
 		// Kontrollera om innehållet har page builder-shortcodes.
 		// Om ja, översätt bara titel/excerpt/slug — inte content.
 		// Content hanteras av String Translator (output buffer) istället.
-		$has_page_builder = $this->has_page_builder_content( $post->post_content );
+		$has_page_builder = self::has_page_builder_content( $post->post_content );
 
 		// Översätt titel
 		$translated_title = '';
@@ -291,7 +291,7 @@ class CoTranslate_Post_Translator {
 	 * @param string $content Rå post_content.
 	 * @return bool True om page builder-shortcodes hittades.
 	 */
-	private function has_page_builder_content( $content ) {
+	public static function has_page_builder_content( $content ) {
 		if ( empty( $content ) ) {
 			return false;
 		}

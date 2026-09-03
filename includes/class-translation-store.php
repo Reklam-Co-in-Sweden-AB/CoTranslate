@@ -384,9 +384,10 @@ class CoTranslate_Translation_Store {
 	 * @param string $language       Målspråk.
 	 * @param string $translated_text Översatt text.
 	 * @param string $context        Kontext (menu, widget, theme, woocommerce, general).
+	 * @param int    $seen_post_id   Sida där texten först sågs (0 = okänd). Sätts bara vid första insättning.
 	 * @return bool True vid lyckad sparning.
 	 */
-	public function save_string_translation( $source_text, $language, $translated_text, $context = 'general' ) {
+	public function save_string_translation( $source_text, $language, $translated_text, $context = 'general', $seen_post_id = 0 ) {
 		global $wpdb;
 
 		$hash = $this->hash_text( $source_text );
@@ -394,16 +395,18 @@ class CoTranslate_Translation_Store {
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$sql = $wpdb->prepare(
 			"INSERT INTO {$this->table_strings}
-				(source_hash, source_text, language, translated_text, context, is_manual)
-			VALUES (%s, %s, %s, %s, %s, 0)
+				(source_hash, source_text, language, translated_text, context, is_manual, first_seen_post_id)
+			VALUES (%s, %s, %s, %s, %s, 0, %d)
 			ON DUPLICATE KEY UPDATE
 				translated_text = IF(is_manual = 0, VALUES(translated_text), translated_text),
-				context = IF(is_manual = 0, VALUES(context), context)",
+				context = IF(is_manual = 0, VALUES(context), context),
+				first_seen_post_id = IF(first_seen_post_id IS NULL OR first_seen_post_id = 0, VALUES(first_seen_post_id), first_seen_post_id)",
 			$hash,
 			$source_text,
 			$language,
 			$translated_text,
-			$context
+			$context,
+			(int) $seen_post_id
 		);
 		// phpcs:enable
 

@@ -37,6 +37,7 @@ class CoTranslate_Admin {
 	 */
 	public function init() {
 		add_action( 'admin_menu', array( $this, 'add_admin_menu' ) );
+		add_action( 'admin_init', array( $this, 'redirect_legacy_pages' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 
 		// AJAX-endpoints
@@ -57,78 +58,56 @@ class CoTranslate_Admin {
 		add_action( 'wp_ajax_cotranslate_delete_string', array( $this, 'ajax_delete_string' ) );
 		add_action( 'wp_ajax_cotranslate_scan_page', array( $this, 'ajax_scan_page' ) );
 		add_action( 'wp_ajax_cotranslate_scan_all', array( $this, 'ajax_scan_all' ) );
-		add_action( 'wp_ajax_cotranslate_glossary_process', array( $this, 'ajax_glossary_process' ) );
+		add_action( 'wp_ajax_cotranslate_process_queue_now', array( $this, 'ajax_process_queue_now' ) );
 		add_action( 'wp_ajax_cotranslate_glossary_release', array( $this, 'ajax_glossary_release' ) );
 	}
 
 	/**
-	 * Lägg till menypost i admin.
+	 * Lägg till menyposter i admin.
+	 *
+	 * En sida per fråga: "Hur ligger vi till?" (Översikt), "Var är den här
+	 * sidan?" (Sidor), "Var är den här knapptexten?" (Texter), "Varför blev
+	 * ordet så?" (Terminologi), och Inställningar för det man ändrar en gång.
 	 */
 	public function add_admin_menu() {
 		add_menu_page(
 			'CoTranslate',
 			'CoTranslate',
-			'manage_options',
+			'edit_posts',
 			'cotranslate',
-			array( $this, 'render_settings_page' ),
+			array( $this, 'render_overview_page' ),
 			'dashicons-translation',
 			80
 		);
 
-		add_submenu_page(
-			'cotranslate',
-			'Inställningar',
-			'Inställningar',
-			'manage_options',
-			'cotranslate',
-			array( $this, 'render_settings_page' )
-		);
-
-		add_submenu_page(
-			'cotranslate',
-			'Översättningar',
-			'Översättningar',
-			'manage_options',
-			'cotranslate-translations',
-			array( $this, 'render_translations_page' )
-		);
-
-		add_submenu_page(
-			'cotranslate',
-			'Strängar',
-			'Strängar',
-			'manage_options',
-			'cotranslate-strings',
-			array( $this, 'render_strings_page' )
-		);
-
-		add_submenu_page(
-			'cotranslate',
-			'Översätt inte',
-			'Översätt inte',
-			'manage_options',
-			'cotranslate-no-translate',
-			array( $this, 'render_no_translate_page' )
-		);
-
-		add_submenu_page(
-			'cotranslate',
-			'Ordlista',
-			'Ordlista',
-			'manage_options',
-			'cotranslate-glossary',
-			array( $this, 'render_glossary_page' )
-		);
+		add_submenu_page( 'cotranslate', 'Översikt', 'Översikt', 'edit_posts', 'cotranslate', array( $this, 'render_overview_page' ) );
+		add_submenu_page( 'cotranslate', 'Sidor', 'Sidor', 'manage_options', 'cotranslate-translations', array( $this, 'render_translations_page' ) );
+		add_submenu_page( 'cotranslate', 'Texter', 'Texter', 'manage_options', 'cotranslate-strings', array( $this, 'render_strings_page' ) );
+		add_submenu_page( 'cotranslate', 'Terminologi', 'Terminologi', 'edit_posts', 'cotranslate-terminology', array( $this, 'render_terminology_page' ) );
+		add_submenu_page( 'cotranslate', 'Inställningar', 'Inställningar', 'manage_options', 'cotranslate-settings', array( $this, 'render_settings_page' ) );
 	}
 
 	/**
-	 * Rendera sidan "Översätt inte" — ord/fraser som aldrig översätts.
+	 * Omdirigera gamla menylänkar (bokmärken) till rätt flik under Terminologi.
 	 */
-	public function render_no_translate_page() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
+	public function redirect_legacy_pages() {
+		$page = isset( $_GET['page'] ) ? sanitize_key( $_GET['page'] ) : '';
+		$map  = array(
+			'cotranslate-glossary'     => 'glossary',
+			'cotranslate-no-translate' => 'protected',
+		);
 
+		if ( isset( $map[ $page ] ) ) {
+			wp_safe_redirect( admin_url( 'admin.php?page=cotranslate-terminology&tab=' . $map[ $page ] ) );
+			exit;
+		}
+	}
+
+	/**
+	 * Sektion "Skyddade ord" (f.d. "Översätt inte") — ord/fraser som aldrig översätts.
+	 * Renderas som flik under Terminologi. Formuläret postar till samma sida.
+	 */
+	private function render_no_translate_section() {
 		// Spara vid POST.
 		if ( isset( $_POST['cotranslate_no_translate_nonce'] )
 			&& wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['cotranslate_no_translate_nonce'] ) ), 'cotranslate_save_no_translate' ) ) {
@@ -144,7 +123,7 @@ class CoTranslate_Admin {
 				}
 			}
 			update_option( 'cotranslate_no_translate_terms', $saved );
-			echo '<div class="notice notice-success"><p>Sparat.</p></div>';
+			echo '<div class="notice notice-success"><p>Sparat. Gäller allt som översätts från och med nu.</p></div>';
 		}
 
 		$terms             = get_option( 'cotranslate_no_translate_terms', array() );
@@ -152,41 +131,40 @@ class CoTranslate_Admin {
 		$enabled_languages = cotranslate_get_enabled_languages();
 		$supported         = cotranslate_get_supported_languages();
 		?>
-		<div class="wrap cotranslate-admin">
-			<h1>CoTranslate — Översätt inte</h1>
-			<p>Ord och fraser här lämnas oöversatta. Skriv ett ord eller en fras per rad. Matchningen är skiftlägesokänslig.</p>
-			<form method="post">
-				<?php wp_nonce_field( 'cotranslate_save_no_translate', 'cotranslate_no_translate_nonce' ); ?>
+		<p>
+			Ord och fraser här lämnas exakt som de är i alla översättningar — varumärken, produktnamn, egennamn.
+			Skriv ett ord eller en fras per rad. Matchningen är skiftlägesokänslig.
+			Skyddade ord vinner över ordlistan: ett ord som står här nås aldrig av ordlistan.
+		</p>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=cotranslate-terminology&tab=protected' ) ); ?>">
+			<?php wp_nonce_field( 'cotranslate_save_no_translate', 'cotranslate_no_translate_nonce' ); ?>
 
-				<h2>Alla språk</h2>
-				<p class="description">Gäller oavsett målspråk (t.ex. varumärken).</p>
-				<textarea name="cotranslate_nt[_all]" rows="6" class="large-text code"><?php echo esc_textarea( $terms['_all'] ?? '' ); ?></textarea>
+			<h2>Alla språk</h2>
+			<p class="description">Gäller oavsett målspråk (t.ex. varumärken).</p>
+			<textarea name="cotranslate_nt[_all]" rows="6" class="large-text code"><?php echo esc_textarea( $terms['_all'] ?? '' ); ?></textarea>
 
-				<?php
-				foreach ( $enabled_languages as $lang ) :
-					if ( $lang === $default_language ) {
-						continue;
-					}
-					$data  = $supported[ $lang ] ?? array( 'native' => $lang, 'flag' => '' );
-					$label = trim( ( $data['flag'] ?? '' ) . ' ' . ( $data['native'] ?? $lang ) );
-					?>
-					<h2><?php echo esc_html( $label ); ?></h2>
-					<textarea name="cotranslate_nt[<?php echo esc_attr( $lang ); ?>]" rows="4" class="large-text code"><?php echo esc_textarea( $terms[ $lang ] ?? '' ); ?></textarea>
-				<?php endforeach; ?>
+			<?php
+			foreach ( $enabled_languages as $lang ) :
+				if ( $lang === $default_language ) {
+					continue;
+				}
+				$data  = $supported[ $lang ] ?? array( 'native' => $lang, 'flag' => '' );
+				$label = trim( ( $data['flag'] ?? '' ) . ' ' . ( $data['native'] ?? $lang ) );
+				?>
+				<h2><?php echo esc_html( $label ); ?></h2>
+				<textarea name="cotranslate_nt[<?php echo esc_attr( $lang ); ?>]" rows="4" class="large-text code"><?php echo esc_textarea( $terms[ $lang ] ?? '' ); ?></textarea>
+			<?php endforeach; ?>
 
-				<p><button type="submit" class="button button-primary">Spara</button></p>
-			</form>
-		</div>
+			<p><button type="submit" class="button button-primary">Spara</button></p>
+		</form>
 		<?php
 	}
 
 	/**
-	 * Rendera sidan "Ordlista" — tvingande termpar per målspråk + kontext.
+	 * Sektion "Ordlista" — tvingande termpar per målspråk.
+	 * Renderas som flik under Terminologi. Formuläret postar till samma sida.
 	 */
-	public function render_glossary_page() {
-		if ( ! current_user_can( 'manage_options' ) ) {
-			return;
-		}
+	private function render_glossary_section() {
 
 		$default_language  = cotranslate_get_default_language();
 		$enabled_languages = cotranslate_get_enabled_languages();
@@ -202,10 +180,6 @@ class CoTranslate_Admin {
 			&& wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['cotranslate_glossary_nonce'] ) ), 'cotranslate_save_glossary' ) ) {
 
 			$saved = true;
-
-			// Kontext
-			$context = isset( $_POST['cotranslate_context'] ) ? sanitize_textarea_field( wp_unslash( $_POST['cotranslate_context'] ) ) : '';
-			update_option( CoTranslate_Glossary::OPTION_CONTEXT, $context );
 
 			$force_sync = ! empty( $_POST['cotranslate_glossary_resync'] );
 			$raw_all    = isset( $_POST['cotranslate_gl'] ) && is_array( $_POST['cotranslate_gl'] ) ? wp_unslash( $_POST['cotranslate_gl'] ) : array();
@@ -236,14 +210,11 @@ class CoTranslate_Admin {
 			}
 		}
 
-		$context = CoTranslate_Glossary::get_context();
 		$pending = $requeue->count_pending();
 		?>
-		<div class="wrap cotranslate-admin">
-			<h1>CoTranslate — Ordlista</h1>
 			<p>
 				Styr hur specifika termer översätts, t.ex. <code>räka = prawn</code>. Ordlistan följs av både DeepL och Claude.
-				När du sparar översätts alla sidor och texter som innehåller ändrade termer om automatiskt. Manuellt rättade texter rörs inte.
+				När du sparar översätts alla sidor och texter som innehåller ändrade termer om automatiskt. Handrättade texter rörs inte.
 			</p>
 
 			<?php if ( $saved ) : ?>
@@ -272,16 +243,8 @@ class CoTranslate_Admin {
 				</p></div>
 			<?php endif; ?>
 
-			<form method="post">
+			<form method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=cotranslate-terminology&tab=glossary' ) ); ?>">
 				<?php wp_nonce_field( 'cotranslate_save_glossary', 'cotranslate_glossary_nonce' ); ?>
-
-				<h2>Kontext</h2>
-				<p class="description">
-					Beskriv kort verksamheten och vilken typ av text som översätts. Skickas med varje översättning
-					och styr ordvalet även för ord som inte står i ordlistan. Kostar inga extra tecken hos DeepL.
-				</p>
-				<textarea name="cotranslate_context" rows="3" class="large-text"
-					placeholder="T.ex. Text för ett svenskt fiskeri- och skaldjursföretag som säljer färsk och fryst fisk till grossister och restauranger. Använd handelns etablerade termer."><?php echo esc_textarea( $context ); ?></textarea>
 
 				<?php
 				foreach ( $enabled_languages as $lang ) :
@@ -301,7 +264,7 @@ class CoTranslate_Admin {
 						<p class="description">
 							En term per rad i formen <code>källterm = målterm</code>. Går även att klistra in två kolumner direkt från Excel.
 							DeepL matchar hela ord, så böjningar behöver egna rader (räka, räkor, räkan). Claude klarar böjningar själv.
-							Ord som står under "Översätt inte" skyddas och nås aldrig av ordlistan.
+							Ord under fliken Skyddade ord nås aldrig av ordlistan.
 						</p>
 
 						<?php if ( $engine_is_deepl ) : ?>
@@ -320,7 +283,7 @@ class CoTranslate_Admin {
 
 						<?php if ( ! empty( $conflicts['posts'] ) || ! empty( $conflicts['strings'] ) ) : ?>
 							<div class="cotranslate-glossary-conflicts">
-								<strong>Manuellt rättade texter som innehåller ord ur ordlistan</strong>
+								<strong>Handrättade texter som innehåller ord ur ordlistan</strong>
 								<p class="description">Dessa rörs inte automatiskt. Släpp rättningen om ordlistan ska gälla även här.</p>
 								<ul>
 									<?php foreach ( $conflicts['posts'] as $row ) : ?>
@@ -354,6 +317,100 @@ class CoTranslate_Admin {
 
 				<p><button type="submit" class="button button-primary">Spara och översätt om berört innehåll</button></p>
 			</form>
+		<?php
+	}
+
+	/**
+	 * Sektion "Kontext och stil" — branschkontext (båda motorerna) och
+	 * stilinstruktion (bara Claude).
+	 */
+	private function render_context_section() {
+		if ( isset( $_POST['cotranslate_context_nonce'] )
+			&& wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['cotranslate_context_nonce'] ) ), 'cotranslate_save_context' ) ) {
+
+			$context = isset( $_POST['cotranslate_context'] ) ? sanitize_textarea_field( wp_unslash( $_POST['cotranslate_context'] ) ) : '';
+			update_option( CoTranslate_Glossary::OPTION_CONTEXT, $context );
+
+			if ( current_user_can( 'manage_options' ) && isset( $_POST['cotranslate_claude_prompt'] ) ) {
+				update_option( 'cotranslate_claude_prompt', sanitize_textarea_field( wp_unslash( $_POST['cotranslate_claude_prompt'] ) ) );
+			}
+
+			echo '<div class="notice notice-success"><p>Sparat. Gäller allt som översätts från och med nu. Redan översatt innehåll påverkas inte.</p></div>';
+		}
+
+		$context       = CoTranslate_Glossary::get_context();
+		$claude_prompt = get_option( 'cotranslate_claude_prompt', '' );
+		$engine        = CoTranslate_Translator_Factory::get_current_engine();
+		?>
+		<form method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=cotranslate-terminology&tab=context' ) ); ?>">
+			<?php wp_nonce_field( 'cotranslate_save_context', 'cotranslate_context_nonce' ); ?>
+
+			<h2>Kontext</h2>
+			<p class="description">
+				Beskriv kort verksamheten och vilken typ av text som översätts. Skickas med varje översättning
+				och styr ordvalet även för ord som inte står i ordlistan. Gäller både DeepL och Claude. Kostar inga extra tecken hos DeepL.
+			</p>
+			<textarea name="cotranslate_context" rows="3" class="large-text"
+				placeholder="T.ex. Text för ett svenskt fiskeri- och skaldjursföretag som säljer färsk och fryst fisk till grossister och restauranger. Använd handelns etablerade termer."><?php echo esc_textarea( $context ); ?></textarea>
+
+			<?php if ( current_user_can( 'manage_options' ) ) : ?>
+				<h2>Stil (bara Claude)</h2>
+				<p class="description">
+					Fritext som styr Claudes ton och stil, t.ex. "Använd en varm, personlig ton". Lämna tomt för neutral översättning.
+					<?php if ( CoTranslate_Translator_Factory::ENGINE_CLAUDE !== $engine ) : ?>
+						<strong>Används inte just nu</strong> — vald motor är DeepL.
+					<?php endif; ?>
+				</p>
+				<textarea name="cotranslate_claude_prompt" rows="3" class="large-text"
+					placeholder="T.ex. Använd en varm, personlig ton. Behåll tekniska termer på engelska."><?php echo esc_textarea( $claude_prompt ); ?></textarea>
+			<?php endif; ?>
+
+			<p><button type="submit" class="button button-primary">Spara</button></p>
+		</form>
+		<?php
+	}
+
+	/**
+	 * Rendera sidan "Terminologi" med flikarna Ordlista, Skyddade ord och
+	 * Kontext och stil. Fliken väljs via ?tab= så att formulär-POST landar rätt.
+	 */
+	public function render_terminology_page() {
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			return;
+		}
+
+		$tabs = array(
+			'glossary'  => 'Ordlista',
+			'protected' => 'Skyddade ord',
+			'context'   => 'Kontext och stil',
+		);
+		$active = isset( $_GET['tab'] ) ? sanitize_key( $_GET['tab'] ) : 'glossary';
+		if ( ! isset( $tabs[ $active ] ) ) {
+			$active = 'glossary';
+		}
+		?>
+		<div class="wrap cotranslate-admin">
+			<h1>CoTranslate — Terminologi</h1>
+			<p>Allt som styr <em>vilka ord</em> översättningen väljer. Ändringar gäller allt som översätts från och med nu; ordlistan översätter dessutom om berört innehåll direkt.</p>
+
+			<nav class="cotranslate-tabs">
+				<?php foreach ( $tabs as $slug => $label ) : ?>
+					<a class="cotranslate-tab cotranslate-tab-link <?php echo $slug === $active ? 'active' : ''; ?>"
+						href="<?php echo esc_url( admin_url( 'admin.php?page=cotranslate-terminology&tab=' . $slug ) ); ?>"><?php echo esc_html( $label ); ?></a>
+				<?php endforeach; ?>
+			</nav>
+
+			<div class="cotranslate-tab-content active">
+				<?php
+				if ( 'protected' === $active ) {
+					$this->render_no_translate_section();
+				} elseif ( 'context' === $active ) {
+					$this->render_context_section();
+				} else {
+					$this->render_glossary_section();
+				}
+				?>
+			</div>
 		</div>
 		<?php
 	}
@@ -364,7 +421,7 @@ class CoTranslate_Admin {
 	 * Anropas i loop från både adminsidan och frontend-editorn, därför
 	 * accepteras båda nonce-typerna och behörigheten är edit_posts.
 	 */
-	public function ajax_glossary_process() {
+	public function ajax_process_queue_now() {
 		$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
 		if ( ! wp_verify_nonce( $nonce, 'cotranslate_admin' ) && ! wp_verify_nonce( $nonce, 'cotranslate_frontend' ) ) {
 			wp_send_json_error( 'Ogiltig säkerhetstoken.' );
@@ -399,7 +456,7 @@ class CoTranslate_Admin {
 	public function ajax_glossary_release() {
 		check_ajax_referer( 'cotranslate_admin', 'nonce' );
 
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'edit_posts' ) ) {
 			wp_send_json_error( 'Otillräckliga behörigheter.' );
 		}
 
@@ -462,6 +519,221 @@ class CoTranslate_Admin {
 	}
 
 	/**
+	 * Rendera startsidan "Översikt": hur det fungerar, status per språk,
+	 * kö och bakgrundsjobb, kvot och kom igång-checklista.
+	 */
+	public function render_overview_page() {
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			return;
+		}
+
+		$is_admin          = current_user_can( 'manage_options' );
+		$default_language  = cotranslate_get_default_language();
+		$enabled_languages = cotranslate_get_enabled_languages();
+		$supported         = cotranslate_get_supported_languages();
+		$engine            = CoTranslate_Translator_Factory::get_current_engine();
+		$engine_is_deepl   = CoTranslate_Translator_Factory::ENGINE_DEEPL === $engine;
+		$requeue           = new CoTranslate_Glossary_Requeue( $this->store );
+		$pending           = $requeue->count_pending();
+
+		$post_stats   = array();
+		$string_stats = array();
+		foreach ( $this->store->get_post_stats() as $row ) {
+			$post_stats[ $row->language ] = $row;
+		}
+		foreach ( $this->store->get_string_stats() as $row ) {
+			$string_stats[ $row->language ] = $row;
+		}
+
+		$target_languages = array_values( array_diff( $enabled_languages, array( $default_language ) ) );
+
+		// Kö och bakgrundsjobb
+		global $wpdb;
+		$t_trans   = $wpdb->prefix . 'cotranslate_translations';
+		$t_strings = $wpdb->prefix . 'cotranslate_strings';
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$last_post_run = $wpdb->get_var( "SELECT MAX(updated_at) FROM {$t_trans} WHERE status = 'auto'" );
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$last_string_run = $wpdb->get_var( "SELECT MAX(updated_at) FROM {$t_strings} WHERE translated_text <> '' AND is_manual = 0" );
+		$last_run       = max( (string) $last_post_run, (string) $last_string_run );
+		$cron_next      = wp_next_scheduled( 'cotranslate_process_queue' );
+		$cron_disabled  = defined( 'DISABLE_WP_CRON' ) && DISABLE_WP_CRON;
+		$pending_total  = $pending['posts'] + $pending['strings'];
+
+		// Kvot (DeepL, cachad 1 h)
+		$usage = null;
+		if ( $engine_is_deepl && ! empty( cotranslate_get_api_key() ) ) {
+			$usage = $this->api->get_usage();
+			if ( is_wp_error( $usage ) ) {
+				$usage = null;
+			}
+		}
+
+		// Kom igång
+		$has_key         = $engine_is_deepl ? ! empty( cotranslate_get_api_key() ) : ! empty( get_option( 'cotranslate_claude_api_key', '' ) );
+		$has_target      = ! empty( $target_languages );
+		$default_enabled = in_array( $default_language, $enabled_languages, true );
+		$has_content     = ! empty( $post_stats ) || ! empty( $string_stats );
+		$setup_done      = $has_key && $has_target && $default_enabled && $has_content;
+		$settings_url    = admin_url( 'admin.php?page=cotranslate-settings' );
+		?>
+		<div class="wrap cotranslate-admin cotranslate-overview">
+			<h1>CoTranslate — Översikt</h1>
+
+			<?php if ( ! $setup_done ) : ?>
+				<div class="cotranslate-card cotranslate-setup">
+					<h2>Kom igång</h2>
+					<ul class="cotranslate-checklist">
+						<li class="<?php echo $has_key ? 'done' : ''; ?>">
+							API-nyckel sparad
+							<?php if ( ! $has_key && $is_admin ) : ?> — <a href="<?php echo esc_url( $settings_url ); ?>">lägg till under Inställningar</a><?php endif; ?>
+						</li>
+						<li class="<?php echo $has_target ? 'done' : ''; ?>">
+							Minst ett målspråk aktiverat
+							<?php if ( ! $has_target && $is_admin ) : ?> — <a href="<?php echo esc_url( $settings_url ); ?>">välj språk</a><?php endif; ?>
+						</li>
+						<li class="<?php echo $default_enabled ? 'done' : ''; ?>">
+							Standardspråket (<?php echo esc_html( $supported[ $default_language ]['native'] ?? $default_language ); ?>) är med bland aktiverade språk
+							<?php if ( ! $default_enabled ) : ?> — annars visas inte språkväljaren<?php endif; ?>
+						</li>
+						<li class="<?php echo $has_content ? 'done' : ''; ?>">
+							Innehållet är översatt en första gång
+							<?php if ( ! $has_content && $is_admin && $has_key && $has_target ) : ?> — använd "Översätt hela sajten" nedan<?php endif; ?>
+						</li>
+					</ul>
+				</div>
+			<?php endif; ?>
+
+			<details class="cotranslate-card cotranslate-howto" id="cotranslate-howto" open>
+				<summary>Så fungerar det</summary>
+				<ul>
+					<li><strong>Sidor</strong> översätts som helhet när du publicerar eller uppdaterar dem.</li>
+					<li><strong>Texter</strong> — menyer, knappar, och allt innehåll på sidor byggda med Beaver Builder eller annan sidbyggare — plockas upp första gången någon besöker sidan på ett annat språk, och översätts strax därefter.</li>
+					<li><strong>Allt nytt hamnar i en kö</strong> som körs i bakgrunden varje minut. Tryck "Kör kön nu" för att slippa vänta.</li>
+					<li><strong>Handrättade</strong> översättningar skrivs aldrig över automatiskt. Rätta direkt på sajten med Redigera-knappen, eller under Sidor och Texter.</li>
+				</ul>
+			</details>
+
+			<div class="cotranslate-card cotranslate-queue">
+				<h2>Kö och bakgrundsjobb</h2>
+				<div class="cotranslate-queue-grid">
+					<div>
+						<span class="cotranslate-label">Kö</span>
+						<?php if ( $pending_total > 0 ) : ?>
+							<strong><?php echo esc_html( sprintf( '%d sidor och %d texter väntar.', $pending['posts'], $pending['strings'] ) ); ?></strong>
+						<?php else : ?>
+							<strong>Kön är tom.</strong>
+						<?php endif; ?>
+						<?php if ( $last_run ) : ?>
+							<br /><span class="description">Kördes senast <?php echo esc_html( wp_date( 'Y-m-d H:i', strtotime( $last_run ) ) ); ?></span>
+						<?php endif; ?>
+					</div>
+					<div>
+						<span class="cotranslate-label">Bakgrundsjobb</span>
+						<?php if ( $cron_next && ! $cron_disabled ) : ?>
+							<span class="cotranslate-dot cotranslate-dot-ok"></span> <strong>Igång</strong>
+							<br /><span class="description">Nästa körning <?php echo esc_html( wp_date( 'H:i', $cron_next ) ); ?></span>
+						<?php elseif ( $cron_disabled ) : ?>
+							<span class="cotranslate-dot cotranslate-dot-warn"></span> <strong>WP-Cron är avstängd</strong>
+							<br /><span class="description">Servern måste anropa wp-cron.php själv, annars körs kön bara när du trycker "Kör kön nu".</span>
+						<?php else : ?>
+							<span class="cotranslate-dot cotranslate-dot-warn"></span> <strong>Inte schemalagt</strong>
+							<br /><span class="description">Schemaläggs igen när du trycker "Kör kön nu".</span>
+						<?php endif; ?>
+					</div>
+					<?php if ( $usage ) : ?>
+						<?php $percent = round( $usage['character_count'] / max( $usage['character_limit'], 1 ) * 100, 1 ); ?>
+						<div>
+							<span class="cotranslate-label">DeepL-kvot</span>
+							<div class="cotranslate-usage-bar" style="margin:4px 0;">
+								<div class="cotranslate-usage-fill <?php echo $percent > 95 ? 'danger' : ( $percent > 80 ? 'warning' : '' ); ?>" style="width:<?php echo esc_attr( min( 100, $percent ) ); ?>%"></div>
+							</div>
+							<span class="description"><?php echo esc_html( number_format_i18n( $usage['character_count'] ) . ' / ' . number_format_i18n( $usage['character_limit'] ) . ' tecken (' . $percent . ' %)' ); ?></span>
+							<?php if ( $percent >= 95 ) : ?>
+								<br /><span class="cotranslate-error">Kön pausas vid 95 %.</span>
+							<?php endif; ?>
+						</div>
+					<?php endif; ?>
+				</div>
+
+				<div class="cotranslate-queue-actions">
+					<button type="button" class="button button-primary" id="cotranslate-run-queue" <?php disabled( ! $has_key ); ?>>Kör kön nu</button>
+					<?php if ( $is_admin ) : ?>
+						<button type="button" class="button" id="cotranslate-translate-site" <?php disabled( ! $has_key || ! $has_target ); ?>>Översätt hela sajten</button>
+						<span class="description">Går igenom alla sidor och texter. Handrättat innehåll hoppas över.</span>
+					<?php endif; ?>
+				</div>
+				<div id="cotranslate-queue-progress" style="display:none;">
+					<div class="cotranslate-usage-bar"><div class="cotranslate-usage-fill" id="cotranslate-queue-bar" style="width:0%"></div></div>
+					<p id="cotranslate-queue-text"></p>
+				</div>
+			</div>
+
+			<h2>Status per språk</h2>
+			<?php if ( empty( $target_languages ) ) : ?>
+				<p>Inga målspråk aktiverade ännu.</p>
+			<?php endif; ?>
+			<div class="cotranslate-lang-grid">
+				<?php
+				foreach ( $target_languages as $lang ) :
+					$data      = $supported[ $lang ] ?? array( 'native' => $lang, 'flag' => '' );
+					$ps        = $post_stats[ $lang ] ?? null;
+					$ss        = $string_stats[ $lang ] ?? null;
+					$entries   = CoTranslate_Glossary::get_entries( $lang );
+					$gl        = CoTranslate_DeepL_Glossary::get_status( $lang );
+					$s_pending = 0;
+					if ( $ss ) {
+						// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+						$s_pending = (int) $wpdb->get_var( $wpdb->prepare( "SELECT COUNT(*) FROM {$t_strings} WHERE language = %s AND translated_text = '' AND is_manual = 0", $lang ) );
+					}
+					$pages_url = admin_url( 'admin.php?page=cotranslate-translations&lang=' . $lang );
+					$texts_url = admin_url( 'admin.php?page=cotranslate-strings&lang=' . $lang );
+					?>
+					<div class="cotranslate-card cotranslate-lang-card">
+						<h3><?php echo esc_html( trim( ( $data['flag'] ?? '' ) . ' ' . ( $data['native'] ?? $lang ) ) ); ?></h3>
+						<dl>
+							<dt>Sidor</dt>
+							<dd>
+								<?php if ( $ps ) : ?>
+									<a href="<?php echo esc_url( $pages_url . '&status=auto' ); ?>"><?php echo (int) $ps->auto_count; ?> översatta</a> ·
+									<a href="<?php echo esc_url( $pages_url . '&status=pending' ); ?>"><?php echo (int) $ps->pending_count; ?> väntar</a> ·
+									<a href="<?php echo esc_url( $pages_url . '&status=manual' ); ?>"><?php echo (int) $ps->manual_overrides; ?> handrättade</a>
+								<?php else : ?>
+									<span class="description">Inga ännu</span>
+								<?php endif; ?>
+							</dd>
+							<dt>Texter</dt>
+							<dd>
+								<?php if ( $ss ) : ?>
+									<a href="<?php echo esc_url( $texts_url . '&status=auto' ); ?>"><?php echo max( 0, (int) $ss->auto_count - $s_pending ); ?> översatta</a> ·
+									<a href="<?php echo esc_url( $texts_url . '&status=untranslated' ); ?>"><?php echo (int) $s_pending; ?> väntar</a> ·
+									<a href="<?php echo esc_url( $texts_url . '&status=manual' ); ?>"><?php echo (int) $ss->manual_count; ?> handrättade</a>
+								<?php else : ?>
+									<span class="description">Inga ännu</span>
+								<?php endif; ?>
+							</dd>
+							<dt>Terminologi</dt>
+							<dd>
+								<a href="<?php echo esc_url( admin_url( 'admin.php?page=cotranslate-terminology&tab=glossary' ) ); ?>"><?php echo count( $entries ); ?> termer i ordlistan</a>
+								<?php if ( $engine_is_deepl && ! empty( $entries ) ) : ?>
+									<?php if ( '' !== $gl['error'] ) : ?>
+										· <span class="cotranslate-error">DeepL-synk misslyckades</span>
+									<?php elseif ( '' !== $gl['id'] ) : ?>
+										· <span class="description">synkad med DeepL <?php echo esc_html( wp_date( 'H:i', (int) $gl['synced_at'] ) ); ?></span>
+									<?php else : ?>
+										· <span class="cotranslate-error">inte synkad</span>
+									<?php endif; ?>
+								<?php endif; ?>
+							</dd>
+						</dl>
+					</div>
+				<?php endforeach; ?>
+			</div>
+		</div>
+		<?php
+	}
+
+	/**
 	 * Rendera inställningssidan.
 	 */
 	public function render_settings_page() {
@@ -475,7 +747,6 @@ class CoTranslate_Admin {
 		$has_api_key        = ! empty( $api_key );
 		$claude_api_key     = get_option( 'cotranslate_claude_api_key', '' );
 		$has_claude_key     = ! empty( $claude_api_key );
-		$claude_prompt      = get_option( 'cotranslate_claude_prompt', '' );
 		$default_language   = cotranslate_get_default_language();
 		$enabled_languages  = cotranslate_get_enabled_languages();
 		$supported          = cotranslate_get_supported_languages();
@@ -500,7 +771,7 @@ class CoTranslate_Admin {
 
 			<div class="cotranslate-tabs">
 				<button class="cotranslate-tab active" data-tab="settings">Inställningar</button>
-				<button class="cotranslate-tab" data-tab="tools">Verktyg</button>
+				<button class="cotranslate-tab" data-tab="advanced">Avancerat</button>
 				<button class="cotranslate-tab" data-tab="usage">Användning</button>
 			</div>
 
@@ -565,14 +836,11 @@ class CoTranslate_Admin {
 							</td>
 						</tr>
 						<tr>
-							<th>Översättningsinstruktioner</th>
+							<th>Stil och terminologi</th>
 							<td>
-								<textarea id="cotranslate-claude-prompt" rows="4" class="large-text"
-									placeholder="T.ex. &quot;Använd en varm, personlig ton. Behåll tekniska termer på engelska.&quot;"
-								><?php echo esc_textarea( $claude_prompt ); ?></textarea>
 								<p class="description">
-									Fritext-instruktioner som styr Claudes översättningsstil.
-									Lämna tomt för neutral översättning.
+									Ton, stil, ordlista och skyddade ord ställs in under
+									<a href="<?php echo esc_url( admin_url( 'admin.php?page=cotranslate-terminology&tab=context' ) ); ?>">Terminologi</a>.
 								</p>
 							</td>
 						</tr>
@@ -746,89 +1014,20 @@ class CoTranslate_Admin {
 				</p>
 			</div>
 
-			<!-- VERKTYG -->
-			<div class="cotranslate-tab-content" id="tab-tools">
-				<h2>Översättningsverktyg</h2>
-
-				<table class="form-table">
-					<tr>
-						<th>Översätt allt innehåll</th>
-						<td>
-							<button type="button" class="button button-primary" id="cotranslate-translate-all">
-								Köa alla poster för översättning
-							</button>
-							<p class="description">Köar alla publicerade poster, sidor och produkter för översättning via DeepL.</p>
-							<div id="cotranslate-translate-all-status"></div>
-						</td>
-					</tr>
-					<tr>
-						<th>Översätt enskild post</th>
-						<td>
-							<input type="number" id="cotranslate-post-id" placeholder="Post-ID" class="small-text" />
-							<select id="cotranslate-post-language">
-								<?php
-								foreach ( $enabled_languages as $lang ) :
-									if ( $lang === $default_language ) {
-										continue;
-									}
-									$data = $supported[ $lang ] ?? array( 'native' => $lang );
-									?>
-									<option value="<?php echo esc_attr( $lang ); ?>">
-										<?php echo esc_html( $data['native'] ?? $lang ); ?>
-									</option>
-								<?php endforeach; ?>
-							</select>
-							<button type="button" class="button" id="cotranslate-translate-post">Översätt</button>
-							<div id="cotranslate-translate-post-status"></div>
-						</td>
-					</tr>
-				</table>
-
-				<h2>Strängöversättning (tematext, menyer, knappar)</h2>
+			<!-- AVANCERAT -->
+			<div class="cotranslate-tab-content" id="tab-advanced">
 				<p class="description">
-					Sidor med page builder (Uncode/WPBakery, Divi, Beaver Builder) översätts via strängtabellen.
-					Skanna en sida för att samla alla strängar, sedan översätt dem med DeepL.
+					Verktyg för att översätta innehåll finns på <a href="<?php echo esc_url( admin_url( 'admin.php?page=cotranslate' ) ); ?>">Översikt</a>
+					("Kör kön nu" och "Översätt hela sajten"), som radknappar under Sidor, och som "Hämta texter från en sida" under Texter.
 				</p>
-				<table class="form-table">
-					<tr>
-						<th>Skanna alla sidor</th>
-						<td>
-							<button type="button" class="button button-primary" id="cotranslate-scan-all">
-								Skanna och översätt alla sidor
-							</button>
-							<p class="description">Skannar alla publicerade sidor för varje aktiverat språk, samlar strängar och översätter dem via DeepL. Allt i ett steg.</p>
-							<div id="cotranslate-scan-all-status"></div>
-						</td>
-					</tr>
-					<tr>
-						<th>Skanna enskild sida</th>
-						<td>
-							<input type="url" id="cotranslate-scan-url" class="regular-text"
-								placeholder="https://trako.se/en/" />
-							<button type="button" class="button" id="cotranslate-scan-page">Skanna</button>
-							<p class="description">Ange en URL med språkprefix.</p>
-							<div id="cotranslate-scan-status"></div>
-						</td>
-					</tr>
-					<tr>
-						<th>Översätt strängar</th>
-						<td>
-							<button type="button" class="button button-primary" id="cotranslate-process-strings">
-								Översätt alla köade strängar nu
-							</button>
-							<p class="description">Översätter alla strängar som saknar översättning via DeepL. Kräver inte att du väntar på WP-Cron.</p>
-							<div id="cotranslate-process-strings-status"></div>
-						</td>
-					</tr>
-				</table>
 
 				<h2>Exportera / Importera</h2>
 				<table class="form-table">
 					<tr>
 						<th>Exportera</th>
 						<td>
-							<button type="button" class="button" id="cotranslate-export-posts">Exportera post-översättningar (CSV)</button>
-							<button type="button" class="button" id="cotranslate-export-strings">Exportera strängar (CSV)</button>
+							<button type="button" class="button" id="cotranslate-export-posts">Exportera sidor (CSV)</button>
+							<button type="button" class="button" id="cotranslate-export-strings">Exportera texter (CSV)</button>
 						</td>
 					</tr>
 					<tr>
@@ -836,8 +1035,8 @@ class CoTranslate_Admin {
 						<td>
 							<input type="file" id="cotranslate-import-file" accept=".csv" />
 							<select id="cotranslate-import-type">
-								<option value="posts">Post-översättningar</option>
-								<option value="strings">Strängar</option>
+								<option value="posts">Sidor</option>
+								<option value="strings">Texter</option>
 							</select>
 							<button type="button" class="button" id="cotranslate-import-btn">Importera CSV</button>
 						</td>
@@ -852,16 +1051,11 @@ class CoTranslate_Admin {
 							<button type="button" class="button" id="cotranslate-migrate-v2">
 								Importera från Coscribe Translator v2
 							</button>
-							<p class="description">Importerar strängar och manuella overrides från Coscribe Translator v2 (om installerat).</p>
+							<p class="description">Importerar texter och handrättningar från Coscribe Translator v2 (om installerat).</p>
 							<div id="cotranslate-migrate-status"></div>
 						</td>
 					</tr>
 				</table>
-
-				<h2>Statistik</h2>
-				<div id="cotranslate-stats">
-					<?php $this->render_stats(); ?>
-				</div>
 			</div>
 
 			<!-- ANVÄNDNING -->
@@ -946,7 +1140,11 @@ class CoTranslate_Admin {
 
 		?>
 		<div class="wrap cotranslate-admin">
-			<h1>CoTranslate — Översättningar</h1>
+			<h1>CoTranslate — Sidor</h1>
+			<p class="description">
+				Sidor, inlägg och produkter som översätts som helhet. Sidor byggda med sidbyggare får bara titeln här —
+				innehållet ligger under <a href="<?php echo esc_url( admin_url( 'admin.php?page=cotranslate-strings' ) ); ?>">Texter</a>.
+			</p>
 
 			<!-- Filter -->
 			<div class="cotranslate-filters">
@@ -964,9 +1162,9 @@ class CoTranslate_Admin {
 					</select>
 					<select name="status">
 						<option value="">Alla statusar</option>
-						<option value="auto" <?php selected( $filter_status, 'auto' ); ?>>Auto</option>
-						<option value="manual" <?php selected( $filter_status, 'manual' ); ?>>Manuell</option>
+						<option value="auto" <?php selected( $filter_status, 'auto' ); ?>>Översatt</option>
 						<option value="pending" <?php selected( $filter_status, 'pending' ); ?>>Väntar</option>
+						<option value="manual" <?php selected( $filter_status, 'manual' ); ?>>Handrättad</option>
 					</select>
 					<button type="submit" class="button">Filtrera</button>
 				</form>
@@ -976,12 +1174,12 @@ class CoTranslate_Admin {
 			<table class="wp-list-table widefat fixed striped">
 				<thead>
 					<tr>
-						<th>Post</th>
+						<th>Sida</th>
 						<th>Typ</th>
 						<th>Språk</th>
 						<th>Översatt titel</th>
 						<th>Status</th>
-						<th>Manuell</th>
+						<th>Översätts via</th>
 						<th>Uppdaterad</th>
 						<th>Åtgärder</th>
 					</tr>
@@ -989,17 +1187,23 @@ class CoTranslate_Admin {
 				<tbody>
 					<?php if ( empty( $translations ) ) : ?>
 						<tr>
-							<td colspan="8">Inga översättningar hittade.</td>
+							<td colspan="8">Inga sidor hittade.</td>
 						</tr>
 					<?php else : ?>
-						<?php foreach ( $translations as $t ) : ?>
+						<?php
+						$status_labels = array( 'auto' => 'Översatt', 'pending' => 'Väntar', 'manual' => 'Handrättad' );
+						foreach ( $translations as $t ) :
+							$post_obj    = get_post( $t->post_id );
+							$via_builder = $post_obj && CoTranslate_Post_Translator::has_page_builder_content( $post_obj->post_content );
+							$type_obj    = $t->post_type ? get_post_type_object( $t->post_type ) : null;
+							?>
 							<tr data-id="<?php echo esc_attr( $t->id ); ?>">
 								<td>
 									<a href="<?php echo esc_url( get_edit_post_link( $t->post_id ) ); ?>">
 										<?php echo esc_html( $t->original_title ?: '#' . $t->post_id ); ?>
 									</a>
 								</td>
-								<td><?php echo esc_html( $t->post_type ?? '-' ); ?></td>
+								<td><?php echo esc_html( $type_obj ? $type_obj->labels->singular_name : ( $t->post_type ?? '-' ) ); ?></td>
 								<td>
 									<?php
 									$lang_data = $supported[ $t->language ] ?? null;
@@ -1009,10 +1213,17 @@ class CoTranslate_Admin {
 								<td><?php echo esc_html( mb_substr( $t->translated_title, 0, 60 ) ); ?></td>
 								<td>
 									<span class="cotranslate-status cotranslate-status-<?php echo esc_attr( $t->status ); ?>">
-										<?php echo esc_html( $t->status ); ?>
+										<?php echo esc_html( $status_labels[ $t->status ] ?? $t->status ); ?>
 									</span>
 								</td>
-								<td><?php echo (int) $t->is_manual ? 'Ja' : 'Nej'; ?></td>
+								<td>
+									<?php if ( $via_builder ) : ?>
+										<a href="<?php echo esc_url( admin_url( 'admin.php?page=cotranslate-strings&lang=' . $t->language . '&post_id=' . (int) $t->post_id ) ); ?>"
+											title="Sidan är byggd med sidbyggare. Titeln översätts här, innehållet som texter.">Texter (sidbyggare)</a>
+									<?php else : ?>
+										Hela sidan
+									<?php endif; ?>
+								</td>
 								<td><?php echo esc_html( $t->updated_at ); ?></td>
 								<td>
 									<button type="button" class="button button-small cotranslate-edit-translation"
@@ -1024,7 +1235,13 @@ class CoTranslate_Admin {
 										<button type="button" class="button button-small cotranslate-reset-translation"
 											data-post-id="<?php echo esc_attr( $t->post_id ); ?>"
 											data-language="<?php echo esc_attr( $t->language ); ?>">
-											Återställ
+											Släpp handrättning
+										</button>
+									<?php else : ?>
+										<button type="button" class="button button-small cotranslate-retranslate"
+											data-post-id="<?php echo esc_attr( $t->post_id ); ?>"
+											data-language="<?php echo esc_attr( $t->language ); ?>">
+											Översätt om
 										</button>
 									<?php endif; ?>
 								</td>
@@ -1078,7 +1295,7 @@ class CoTranslate_Admin {
 				</table>
 				<p>
 					<button type="button" class="button button-primary" id="cotranslate-save-edit">
-						Spara (manuell override)
+						Spara som handrättad
 					</button>
 					<button type="button" class="button cotranslate-modal-close-btn">Avbryt</button>
 				</p>
@@ -1103,6 +1320,7 @@ class CoTranslate_Admin {
 		$filter_lang   = isset( $_GET['lang'] ) ? sanitize_key( $_GET['lang'] ) : '';
 		$filter_status = isset( $_GET['status'] ) ? sanitize_key( $_GET['status'] ) : '';
 		$filter_search = isset( $_GET['s'] ) ? sanitize_text_field( wp_unslash( $_GET['s'] ) ) : '';
+		$filter_post   = isset( $_GET['post_id'] ) ? absint( $_GET['post_id'] ) : 0;
 		$paged         = isset( $_GET['paged'] ) ? absint( $_GET['paged'] ) : 1;
 
 		global $wpdb;
@@ -1114,6 +1332,10 @@ class CoTranslate_Admin {
 		if ( ! empty( $filter_lang ) ) {
 			$where[] = 'language = %s';
 			$args[]  = $filter_lang;
+		}
+		if ( $filter_post > 0 ) {
+			$where[] = 'first_seen_post_id = %d';
+			$args[]  = $filter_post;
 		}
 		if ( 'manual' === $filter_status ) {
 			$where[] = 'is_manual = 1';
@@ -1159,12 +1381,29 @@ class CoTranslate_Admin {
 
 		?>
 		<div class="wrap cotranslate-admin">
-			<h1>CoTranslate — Strängar <span class="title-count">(<?php echo (int) $total; ?>)</span></h1>
-			<p class="description">Tema-strängar, menytexter, formulärfält och övrig text som inte tillhör en specifik post. Redigera för att skapa manuella overrides.</p>
+			<h1>CoTranslate — Texter <span class="title-count">(<?php echo (int) $total; ?>)</span></h1>
+			<p class="description">
+				Menyer, knappar, formulärfält och allt innehåll på sidor byggda med sidbyggare. Texterna plockas upp
+				första gången någon besöker sidan på ett annat språk och översätts strax därefter. Redigera för att handrätta.
+			</p>
+
+			<?php if ( $filter_post > 0 ) : ?>
+				<div class="notice notice-info inline">
+					<p>
+						Visar texter som först hittades på
+						<strong><?php echo esc_html( get_the_title( $filter_post ) ?: '#' . $filter_post ); ?></strong>.
+						Texter som delas med andra sidor (t.ex. menyer) räknas till den sida där de sågs först.
+						<a href="<?php echo esc_url( remove_query_arg( array( 'post_id', 'paged' ) ) ); ?>">Visa alla</a>
+					</p>
+				</div>
+			<?php endif; ?>
 
 			<div class="cotranslate-filters">
 				<form method="get">
 					<input type="hidden" name="page" value="cotranslate-strings" />
+					<?php if ( $filter_post > 0 ) : ?>
+						<input type="hidden" name="post_id" value="<?php echo esc_attr( $filter_post ); ?>" />
+					<?php endif; ?>
 					<select name="lang">
 						<option value="">Alla språk</option>
 						<?php foreach ( $enabled_languages as $lang ) : ?>
@@ -1176,34 +1415,42 @@ class CoTranslate_Admin {
 						<?php endforeach; ?>
 					</select>
 					<select name="status">
-						<option value="">Alla</option>
-						<option value="auto" <?php selected( $filter_status, 'auto' ); ?>>Auto-översatta</option>
-						<option value="manual" <?php selected( $filter_status, 'manual' ); ?>>Manuella overrides</option>
-						<option value="untranslated" <?php selected( $filter_status, 'untranslated' ); ?>>Ej översatta</option>
+						<option value="">Alla statusar</option>
+						<option value="auto" <?php selected( $filter_status, 'auto' ); ?>>Översatt</option>
+						<option value="untranslated" <?php selected( $filter_status, 'untranslated' ); ?>>Väntar</option>
+						<option value="manual" <?php selected( $filter_status, 'manual' ); ?>>Handrättad</option>
 					</select>
-					<input type="search" name="s" value="<?php echo esc_attr( $filter_search ); ?>" placeholder="Sök sträng..." />
+					<input type="search" name="s" value="<?php echo esc_attr( $filter_search ); ?>" placeholder="Sök text..." />
 					<button type="submit" class="button">Filtrera</button>
 				</form>
+			</div>
+
+			<div class="cotranslate-inline-tool">
+				<label for="cotranslate-scan-url"><strong>Hämta texter från en sida</strong></label>
+				<p class="description">Vill du inte vänta på första besöket? Ange sidans adress med språkprefix (t.ex. <code>/en/om-oss/</code>) så hämtas texterna och läggs i kön.</p>
+				<input type="url" id="cotranslate-scan-url" class="regular-text" placeholder="<?php echo esc_attr( home_url( '/' . ( $filter_lang ?: ( $enabled_languages[1] ?? 'en' ) ) . '/' ) ); ?>" />
+				<button type="button" class="button" id="cotranslate-scan-page">Hämta texter</button>
+				<span id="cotranslate-scan-status"></span>
 			</div>
 
 			<table class="wp-list-table widefat fixed striped">
 				<thead>
 					<tr>
-						<th style="width:30%">Originaltext</th>
+						<th style="width:28%">Originaltext</th>
 						<th>Språk</th>
-						<th style="width:30%">Översättning</th>
-						<th>Kontext</th>
-						<th>Manuell</th>
+						<th style="width:28%">Översättning</th>
+						<th>Hittad på</th>
+						<th>Status</th>
 						<th>Åtgärder</th>
 					</tr>
 				</thead>
 				<tbody>
 					<?php if ( empty( $strings ) ) : ?>
-						<tr><td colspan="6">Inga strängar hittade.</td></tr>
+						<tr><td colspan="6">Inga texter hittade.</td></tr>
 					<?php else : ?>
 						<?php foreach ( $strings as $s ) : ?>
 							<tr data-id="<?php echo esc_attr( $s->id ); ?>">
-								<td><code style="word-break:break-all;font-size:12px;"><?php echo esc_html( mb_substr( $s->source_text, 0, 80 ) ); ?></code></td>
+								<td><code style="word-break:break-all;font-size:12px;" title="Källa: <?php echo esc_attr( $s->context ); ?>"><?php echo esc_html( mb_substr( $s->source_text, 0, 80 ) ); ?></code></td>
 								<td>
 									<?php
 									$lang_data = $supported[ $s->language ] ?? null;
@@ -1214,11 +1461,27 @@ class CoTranslate_Admin {
 									<?php if ( ! empty( $s->translated_text ) ) : ?>
 										<code style="word-break:break-all;font-size:12px;"><?php echo esc_html( mb_substr( $s->translated_text, 0, 80 ) ); ?></code>
 									<?php else : ?>
-										<em style="color:#999;">Ej översatt</em>
+										<em style="color:#999;">Väntar på översättning</em>
 									<?php endif; ?>
 								</td>
-								<td><span style="font-size:11px;color:#888;"><?php echo esc_html( $s->context ); ?></span></td>
-								<td><?php echo (int) $s->is_manual ? '<strong>Ja</strong>' : 'Nej'; ?></td>
+								<td>
+									<?php if ( ! empty( $s->first_seen_post_id ) ) : ?>
+										<a href="<?php echo esc_url( add_query_arg( array( 'post_id' => (int) $s->first_seen_post_id, 'paged' => false ) ) ); ?>" title="Visa alla texter från den här sidan">
+											<?php echo esc_html( get_the_title( (int) $s->first_seen_post_id ) ?: '#' . (int) $s->first_seen_post_id ); ?>
+										</a>
+									<?php else : ?>
+										<span class="description">Okänd sida</span>
+									<?php endif; ?>
+								</td>
+								<td>
+									<?php if ( (int) $s->is_manual ) : ?>
+										<span class="cotranslate-status cotranslate-status-manual">Handrättad</span>
+									<?php elseif ( '' === (string) $s->translated_text ) : ?>
+										<span class="cotranslate-status cotranslate-status-pending">Väntar</span>
+									<?php else : ?>
+										<span class="cotranslate-status cotranslate-status-auto">Översatt</span>
+									<?php endif; ?>
+								</td>
 								<td>
 									<button type="button" class="button button-small cotranslate-edit-string"
 										data-id="<?php echo esc_attr( $s->id ); ?>"
@@ -1258,7 +1521,7 @@ class CoTranslate_Admin {
 		<div id="cotranslate-string-modal" class="cotranslate-modal" style="display:none;">
 			<div class="cotranslate-modal-content">
 				<span class="cotranslate-modal-close">&times;</span>
-				<h2>Redigera sträng</h2>
+				<h2>Redigera text</h2>
 				<input type="hidden" id="string-edit-id" />
 				<input type="hidden" id="string-edit-source" />
 				<input type="hidden" id="string-edit-language" />
@@ -1273,67 +1536,13 @@ class CoTranslate_Admin {
 					</tr>
 				</table>
 				<p>
-					<button type="button" class="button button-primary" id="cotranslate-save-string">Spara (manuell override)</button>
+					<button type="button" class="button button-primary" id="cotranslate-save-string">Spara som handrättad</button>
 					<button type="button" class="button cotranslate-modal-close">Avbryt</button>
 				</p>
 				<div id="cotranslate-string-edit-status"></div>
 			</div>
 		</div>
 		<?php
-	}
-
-	/**
-	 * Rendera statistik.
-	 */
-	private function render_stats() {
-		$post_stats   = $this->store->get_post_stats();
-		$string_stats = $this->store->get_string_stats();
-		$supported    = cotranslate_get_supported_languages();
-
-		if ( empty( $post_stats ) && empty( $string_stats ) ) {
-			echo '<p>Inga översättningar ännu.</p>';
-			return;
-		}
-
-		if ( ! empty( $post_stats ) ) {
-			echo '<h3>Post-översättningar</h3>';
-			echo '<table class="wp-list-table widefat fixed striped">';
-			echo '<thead><tr><th>Språk</th><th>Totalt</th><th>Auto</th><th>Manuell</th><th>Väntar</th><th>Tecken</th></tr></thead>';
-			echo '<tbody>';
-			foreach ( $post_stats as $stat ) {
-				$lang_data = $supported[ $stat->language ] ?? null;
-				$lang_name = $lang_data ? $lang_data['flag'] . ' ' . $lang_data['native'] : $stat->language;
-				printf(
-					'<tr><td>%s</td><td>%d</td><td>%d</td><td>%d</td><td>%d</td><td>%s</td></tr>',
-					esc_html( $lang_name ),
-					(int) $stat->total,
-					(int) $stat->auto_count,
-					(int) $stat->manual_count,
-					(int) $stat->pending_count,
-					esc_html( number_format_i18n( (int) $stat->total_chars ) )
-				);
-			}
-			echo '</tbody></table>';
-		}
-
-		if ( ! empty( $string_stats ) ) {
-			echo '<h3>Strängöversättningar</h3>';
-			echo '<table class="wp-list-table widefat fixed striped">';
-			echo '<thead><tr><th>Språk</th><th>Totalt</th><th>Auto</th><th>Manuell</th></tr></thead>';
-			echo '<tbody>';
-			foreach ( $string_stats as $stat ) {
-				$lang_data = $supported[ $stat->language ] ?? null;
-				$lang_name = $lang_data ? $lang_data['flag'] . ' ' . $lang_data['native'] : $stat->language;
-				printf(
-					'<tr><td>%s</td><td>%d</td><td>%d</td><td>%d</td></tr>',
-					esc_html( $lang_name ),
-					(int) $stat->total,
-					(int) $stat->auto_count,
-					(int) $stat->manual_count
-				);
-			}
-			echo '</tbody></table>';
-		}
 	}
 
 	// =========================================================================
@@ -2137,18 +2346,21 @@ class CoTranslate_Admin {
 		// Extrahera synlig text
 		$strings = $this->extract_visible_text( $html );
 
+		// Vilken sida var det? (för filtret "Hittad på" under Texter)
+		$seen_post_id = (int) url_to_postid( preg_replace( '#/' . preg_quote( $language, '#' ) . '(/|$)#', '$1', $url, 1 ) );
+
 		// Filtrera bort strängar som redan finns i databasen
 		$new_count = 0;
 		foreach ( $strings as $text ) {
 			$existing = $this->store->get_string_translation( $text, $language );
 			if ( null === $existing || '' === $existing ) {
-				$this->store->save_string_translation( $text, $language, '', 'scanned' );
+				$this->store->save_string_translation( $text, $language, '', 'scanned', $seen_post_id );
 				$new_count++;
 			}
 		}
 
 		wp_send_json_success( array(
-			'message'       => sprintf( '%d strängar hittade, %d nya köade för översättning.', count( $strings ), $new_count ),
+			'message'       => sprintf( '%d texter hittade, %d nya lagda i kön. De översätts inom en minut eller när du trycker "Kör kön nu" på Översikt.', count( $strings ), $new_count ),
 			'total_found'   => count( $strings ),
 			'new_queued'    => $new_count,
 			'language'      => $language,
@@ -2324,7 +2536,7 @@ class CoTranslate_Admin {
 			foreach ( $strings as $text ) {
 				$existing = $this->store->get_string_translation( $text, $current_lang );
 				if ( null === $existing || '' === $existing ) {
-					$this->store->save_string_translation( $text, $current_lang, '', 'scanned' );
+					$this->store->save_string_translation( $text, $current_lang, '', 'scanned', $post->ID );
 					$new_strings++;
 				}
 			}

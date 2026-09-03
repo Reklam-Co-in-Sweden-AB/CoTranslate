@@ -536,10 +536,12 @@ class CoTranslate_String_Translator {
 
 		$language = cotranslate_get_current_language();
 		$texts    = array_keys( $this->untranslated );
+		$post_id  = is_singular() ? (int) get_queried_object_id() : 0;
 
-		// Spara med tom translated_text som markör för "behöver översättas"
+		// Spara med tom translated_text som markör för "behöver översättas",
+		// och kom ihåg vilken sida texten först sågs på (filtret "Hittad på").
 		foreach ( $texts as $text ) {
-			$this->store->save_string_translation( $text, $language, '', 'general' );
+			$this->store->save_string_translation( $text, $language, '', 'general', $post_id );
 		}
 
 		// Schemalägg bakgrundsöversättning

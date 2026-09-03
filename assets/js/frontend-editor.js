@@ -261,7 +261,7 @@
 	 */
 	function processQueue(statusEl, done) {
 		var data = new FormData();
-		data.append('action', 'cotranslate_glossary_process');
+		data.append('action', 'cotranslate_process_queue_now');
 		data.append('nonce', cotranslateFrontend.nonce);
 
 		fetch(cotranslateFrontend.ajaxUrl, { method: 'POST', body: data, credentials: 'same-origin' })

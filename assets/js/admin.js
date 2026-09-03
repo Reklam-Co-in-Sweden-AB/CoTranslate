@@ -9,8 +9,9 @@
 		$('.cotranslate-color-field').wpColorPicker();
 	}
 
-	// Flikar
+	// Flikar (länkflikar med href navigerar som vanligt)
 	$(document).on('click', '.cotranslate-tab', function () {
+		if ($(this).is('a')) return;
 		var tab = $(this).data('tab');
 		$('.cotranslate-tab').removeClass('active');
 		$(this).addClass('active');
@@ -139,7 +140,6 @@
 			engine: $('#cotranslate-engine').val(),
 			api_key: $('#cotranslate-api-key').val(),
 			claude_api_key: $('#cotranslate-claude-key').val(),
-			claude_prompt: $('#cotranslate-claude-prompt').val(),
 			default_language: $('#cotranslate-default-language').val(),
 			enabled_languages: enabledLanguages,
 			post_types: postTypes,
@@ -320,9 +320,31 @@
 		});
 	});
 
-	// Återställ översättning
+	// Översätt om en sida (icke-handrättad rad under Sidor)
+	$(document).on('click', '.cotranslate-retranslate', function () {
+		var $btn = $(this);
+		$btn.prop('disabled', true).text('Översätter...');
+
+		$.post(cotranslateAdmin.ajaxUrl, {
+			action: 'cotranslate_translate_post',
+			nonce: cotranslateAdmin.nonce,
+			post_id: $btn.data('post-id'),
+			language: $btn.data('language')
+		}, function (response) {
+			if (response.success) {
+				location.reload();
+			} else {
+				$btn.prop('disabled', false).text('Översätt om');
+				$btn.after('<span class="cotranslate-error"> ' + response.data + '</span>');
+			}
+		}).fail(function () {
+			$btn.prop('disabled', false).text('Översätt om');
+		});
+	});
+
+	// Släpp handrättning
 	$(document).on('click', '.cotranslate-reset-translation', function () {
-		if (!confirm('Återställ till automatisk översättning? Den manuella overriden tas bort.')) {
+		if (!confirm('Släpp handrättningen? Sidan översätts om automatiskt och den handrättade texten försvinner.')) {
 			return;
 		}
 
@@ -393,7 +415,7 @@
 
 	// Radera sträng
 	$(document).on('click', '.cotranslate-delete-string', function () {
-		if (!confirm('Radera denna sträng?')) return;
+		if (!confirm('Radera den här texten? Den plockas upp igen vid nästa besök om den fortfarande finns på sajten.')) return;
 
 		var $btn = $(this);
 		$.post(cotranslateAdmin.ajaxUrl, {
@@ -666,7 +688,55 @@
 })(jQuery);
 
 /**
- * Ordlista: omöversättningsloop och släpp av manuella rättningar.
+ * Kö-loop (delas av Översikt, Ordlista och "Översätt hela sajten").
+ *
+ * Kör kön i förgrunden tills den är tom och skriver status i angivna element.
+ */
+(function ($) {
+	'use strict';
+
+	/**
+	 * @param {jQuery}   $text   Element för statustext.
+	 * @param {jQuery}   $bar    Förloppsstapel (fyllnadselementet), valfritt.
+	 * @param {Function} done    Callback när kön är tom eller stoppad (ok: bool).
+	 */
+	window.cotranslateRunQueue = function ($text, $bar, done) {
+		var startTotal = null;
+
+		function step() {
+			$.post(cotranslateAdmin.ajaxUrl, {
+				action: 'cotranslate_process_queue_now',
+				nonce: cotranslateAdmin.nonce
+			}, function (response) {
+				if (!response.success) {
+					$text.html('<span class="cotranslate-error">' + response.data + ' Resten körs i bakgrunden.</span>');
+					if (done) done(false);
+					return;
+				}
+				var left = response.data.posts + response.data.strings;
+				if (startTotal === null) startTotal = Math.max(left, 1);
+				if ($bar) $bar.css('width', Math.min(100, Math.round((1 - left / startTotal) * 100)) + '%');
+
+				if (left > 0) {
+					$text.text('Översätter... ' + response.data.posts + ' sidor och ' + response.data.strings + ' texter kvar.');
+					step();
+				} else {
+					if ($bar) $bar.css('width', '100%');
+					$text.html('<span class="cotranslate-success">Klart! Kön är tom.</span>');
+					if (done) done(true);
+				}
+			}).fail(function () {
+				$text.html('<span class="cotranslate-error">Nätverksfel. Resten körs i bakgrunden.</span>');
+				if (done) done(false);
+			});
+		}
+
+		step();
+	};
+})(jQuery);
+
+/**
+ * Ordlista: omöversättningsloop och släpp av handrättningar.
  */
 (function ($) {
 	'use strict';
@@ -674,36 +744,17 @@
 	var $progress = $('#cotranslate-glossary-progress');
 	if (!$progress.length) return;
 
-	function processQueue() {
-		$.post(cotranslateAdmin.ajaxUrl, {
-			action: 'cotranslate_glossary_process',
-			nonce: cotranslateAdmin.nonce
-		}, function (response) {
-			if (!response.success) {
-				$('#cotranslate-glossary-progress-text').html('<span class="cotranslate-error">' + response.data + ' Resten översätts i bakgrunden.</span>');
-				return;
-			}
-			var left = response.data.posts + response.data.strings;
-			if (left > 0) {
-				$('#cotranslate-glossary-progress-text').text(
-					'Översätter om... ' + response.data.posts + ' sidor och ' + response.data.strings + ' texter kvar.'
-				);
-				processQueue();
-			} else {
-				$('#cotranslate-glossary-progress-text').html('<span class="cotranslate-success">Klart! Allt berört innehåll är omöversatt.</span>');
-				$('#cotranslate-glossary-bar').css('width', '100%');
-			}
-		}).fail(function () {
-			$('#cotranslate-glossary-progress-text').html('<span class="cotranslate-error">Nätverksfel. Resten översätts i bakgrunden.</span>');
-		});
+	function run() {
+		$progress.show();
+		window.cotranslateRunQueue($('#cotranslate-glossary-progress-text'), $('#cotranslate-glossary-bar'));
 	}
 
 	// Starta loopen automatiskt om något köades vid senaste spar
 	if (parseInt($progress.data('pending'), 10) > 0) {
-		processQueue();
+		run();
 	}
 
-	// Släpp manuell rättning och översätt om
+	// Släpp handrättning och översätt om
 	$(document).on('click', '.cotranslate-glossary-release', function () {
 		var $btn = $(this);
 		$btn.prop('disabled', true).text('Släpper...');
@@ -717,13 +768,124 @@
 		}, function (response) {
 			if (response.success) {
 				$btn.closest('li').fadeOut(200, function () { $(this).remove(); });
-				$progress.show();
 				$('#cotranslate-glossary-progress-text').text('Översätter om...');
-				processQueue();
+				run();
 			} else {
 				$btn.prop('disabled', false).text('Släpp och översätt om');
 				$btn.after('<span class="cotranslate-error"> ' + response.data + '</span>');
 			}
 		});
 	});
+})(jQuery);
+
+/**
+ * Översikt: "Kör kön nu", "Översätt hela sajten" och ihopfällbart infoblock.
+ */
+(function ($) {
+	'use strict';
+
+	if (!$('.cotranslate-overview').length) return;
+
+	var $progress = $('#cotranslate-queue-progress');
+	var $text = $('#cotranslate-queue-text');
+	var $bar = $('#cotranslate-queue-bar');
+	var $runBtn = $('#cotranslate-run-queue');
+	var $siteBtn = $('#cotranslate-translate-site');
+
+	function lock(locked) {
+		$runBtn.prop('disabled', locked);
+		$siteBtn.prop('disabled', locked);
+	}
+
+	function reloadSoon() {
+		setTimeout(function () { location.reload(); }, 1200);
+	}
+
+	// Kör kön nu
+	$runBtn.on('click', function () {
+		lock(true);
+		$progress.show();
+		$bar.css('width', '0%');
+		$text.text('Startar...');
+		window.cotranslateRunQueue($text, $bar, function () { reloadSoon(); });
+	});
+
+	// Översätt hela sajten: 1) sidor, 2) hämta texter från alla sidor, 3) kör kön
+	$siteBtn.on('click', function () {
+		if (!confirm('Går igenom hela sajten och översätter allt som inte redan är översatt eller handrättat. Det kan ta en stund och förbrukar tecken hos översättningsmotorn. Fortsätt?')) {
+			return;
+		}
+		lock(true);
+		$progress.show();
+		$bar.css('width', '0%');
+		$text.text('Steg 1 av 3: översätter sidor...');
+
+		function phasePosts(offset) {
+			$.post(cotranslateAdmin.ajaxUrl, {
+				action: 'cotranslate_bulk_translate_batch',
+				nonce: cotranslateAdmin.nonce,
+				offset: offset
+			}, function (response) {
+				if (!response.success) {
+					$text.html('<span class="cotranslate-error">' + response.data + '</span>');
+					lock(false);
+					return;
+				}
+				var d = response.data;
+				$bar.css('width', Math.round(d.percent / 3) + '%');
+				$text.text('Steg 1 av 3: översätter sidor... ' + Math.min(d.offset, d.total) + ' / ' + d.total);
+				if (d.done) {
+					phaseScan(0, 0);
+				} else {
+					phasePosts(d.offset);
+				}
+			}).fail(function () {
+				$text.html('<span class="cotranslate-error">Nätverksfel. Försök igen.</span>');
+				lock(false);
+			});
+		}
+
+		function phaseScan(offset, langIndex) {
+			$.post(cotranslateAdmin.ajaxUrl, {
+				action: 'cotranslate_scan_all',
+				nonce: cotranslateAdmin.nonce,
+				offset: offset,
+				lang_index: langIndex
+			}, function (response) {
+				if (!response.success) {
+					$text.html('<span class="cotranslate-error">' + response.data + '</span>');
+					lock(false);
+					return;
+				}
+				var d = response.data;
+				if (d.done) {
+					$bar.css('width', '67%');
+					$text.text('Steg 3 av 3: kör kön...');
+					window.cotranslateRunQueue($text, $bar, function () { reloadSoon(); });
+				} else {
+					$bar.css('width', Math.round(33 + (d.percent || 0) / 3) + '%');
+					$text.text('Steg 2 av 3: hämtar texter... ' + (d.message || ''));
+					phaseScan(d.offset, d.lang_index);
+				}
+			}).fail(function () {
+				$text.html('<span class="cotranslate-error">Nätverksfel. Försök igen.</span>');
+				lock(false);
+			});
+		}
+
+		phasePosts(0);
+	});
+
+	// "Så fungerar det": minns ihopfällt läge per webbläsare
+	var howto = document.getElementById('cotranslate-howto');
+	if (howto) {
+		try {
+			if (localStorage.getItem('cotranslateHowtoClosed') === '1') howto.open = false;
+		} catch (e) { /* localStorage kan vara blockerat */ }
+		howto.addEventListener('toggle', function () {
+			try {
+				localStorage.setItem('cotranslateHowtoClosed', howto.open ? '0' : '1');
+			} catch (e) { /* ignorera */ }
+		});
+	}
 })(jQuery);
