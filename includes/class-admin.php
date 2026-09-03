@@ -57,6 +57,8 @@ class CoTranslate_Admin {
 		add_action( 'wp_ajax_cotranslate_delete_string', array( $this, 'ajax_delete_string' ) );
 		add_action( 'wp_ajax_cotranslate_scan_page', array( $this, 'ajax_scan_page' ) );
 		add_action( 'wp_ajax_cotranslate_scan_all', array( $this, 'ajax_scan_all' ) );
+		add_action( 'wp_ajax_cotranslate_glossary_process', array( $this, 'ajax_glossary_process' ) );
+		add_action( 'wp_ajax_cotranslate_glossary_release', array( $this, 'ajax_glossary_release' ) );
 	}
 
 	/**
@@ -107,6 +109,15 @@ class CoTranslate_Admin {
 			'manage_options',
 			'cotranslate-no-translate',
 			array( $this, 'render_no_translate_page' )
+		);
+
+		add_submenu_page(
+			'cotranslate',
+			'Ordlista',
+			'Ordlista',
+			'manage_options',
+			'cotranslate-glossary',
+			array( $this, 'render_glossary_page' )
 		);
 	}
 
@@ -167,6 +178,255 @@ class CoTranslate_Admin {
 			</form>
 		</div>
 		<?php
+	}
+
+	/**
+	 * Rendera sidan "Ordlista" — tvingande termpar per målspråk + kontext.
+	 */
+	public function render_glossary_page() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			return;
+		}
+
+		$default_language  = cotranslate_get_default_language();
+		$enabled_languages = cotranslate_get_enabled_languages();
+		$supported         = cotranslate_get_supported_languages();
+		$engine_is_deepl   = CoTranslate_Translator_Factory::get_current_engine() === CoTranslate_Translator_Factory::ENGINE_DEEPL;
+		$requeue           = new CoTranslate_Glossary_Requeue( $this->store );
+		$errors            = array();
+		$queued            = array( 'posts' => 0, 'strings' => 0 );
+		$saved             = false;
+
+		// Spara vid POST.
+		if ( isset( $_POST['cotranslate_glossary_nonce'] )
+			&& wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['cotranslate_glossary_nonce'] ) ), 'cotranslate_save_glossary' ) ) {
+
+			$saved = true;
+
+			// Kontext
+			$context = isset( $_POST['cotranslate_context'] ) ? sanitize_textarea_field( wp_unslash( $_POST['cotranslate_context'] ) ) : '';
+			update_option( CoTranslate_Glossary::OPTION_CONTEXT, $context );
+
+			$force_sync = ! empty( $_POST['cotranslate_glossary_resync'] );
+			$raw_all    = isset( $_POST['cotranslate_gl'] ) && is_array( $_POST['cotranslate_gl'] ) ? wp_unslash( $_POST['cotranslate_gl'] ) : array();
+
+			foreach ( $enabled_languages as $lang ) {
+				if ( $lang === $default_language ) {
+					continue;
+				}
+
+				// Tabbar måste överleva (Excel-inklistring) — därför inte sanitize_text_field.
+				$raw = wp_strip_all_tags( (string) ( $raw_all[ $lang ] ?? '' ) );
+				$old = CoTranslate_Glossary::get_entries( $lang );
+				$new = CoTranslate_Glossary::save_raw( $lang, $raw );
+
+				if ( $engine_is_deepl ) {
+					$sync = CoTranslate_DeepL_Glossary::sync_language( $lang, $force_sync );
+					if ( is_wp_error( $sync ) ) {
+						$errors[] = ( $supported[ $lang ]['native'] ?? $lang ) . ': ' . $sync->get_error_message();
+					}
+				}
+
+				$changed = CoTranslate_Glossary::changed_terms( $old, $new );
+				if ( ! empty( $changed ) ) {
+					$result             = $requeue->requeue( $lang, $changed );
+					$queued['posts']   += $result['posts'];
+					$queued['strings'] += $result['strings'];
+				}
+			}
+		}
+
+		$context = CoTranslate_Glossary::get_context();
+		$pending = $requeue->count_pending();
+		?>
+		<div class="wrap cotranslate-admin">
+			<h1>CoTranslate — Ordlista</h1>
+			<p>
+				Styr hur specifika termer översätts, t.ex. <code>räka = prawn</code>. Ordlistan följs av både DeepL och Claude.
+				När du sparar översätts alla sidor och texter som innehåller ändrade termer om automatiskt. Manuellt rättade texter rörs inte.
+			</p>
+
+			<?php if ( $saved ) : ?>
+				<div class="notice notice-success"><p>
+					Sparat.
+					<?php if ( $queued['posts'] + $queued['strings'] > 0 ) : ?>
+						<?php echo esc_html( sprintf( '%d sidor och %d texter översätts om.', $queued['posts'], $queued['strings'] ) ); ?>
+					<?php endif; ?>
+				</p></div>
+			<?php endif; ?>
+
+			<?php foreach ( $errors as $error ) : ?>
+				<div class="notice notice-error"><p><?php echo esc_html( $error ); ?></p></div>
+			<?php endforeach; ?>
+
+			<div id="cotranslate-glossary-progress"
+				data-pending="<?php echo esc_attr( $saved ? $queued['posts'] + $queued['strings'] : 0 ); ?>"
+				style="<?php echo ( $saved && $queued['posts'] + $queued['strings'] > 0 ) ? '' : 'display:none;'; ?>">
+				<div class="cotranslate-usage-bar"><div class="cotranslate-usage-fill" id="cotranslate-glossary-bar" style="width:30%"></div></div>
+				<p id="cotranslate-glossary-progress-text">Startar omöversättning...</p>
+			</div>
+
+			<?php if ( ! $saved && $pending['posts'] + $pending['strings'] > 0 ) : ?>
+				<div class="notice notice-info"><p>
+					<?php echo esc_html( sprintf( '%d sidor och %d texter väntar på översättning och körs i bakgrunden.', $pending['posts'], $pending['strings'] ) ); ?>
+				</p></div>
+			<?php endif; ?>
+
+			<form method="post">
+				<?php wp_nonce_field( 'cotranslate_save_glossary', 'cotranslate_glossary_nonce' ); ?>
+
+				<h2>Kontext</h2>
+				<p class="description">
+					Beskriv kort verksamheten och vilken typ av text som översätts. Skickas med varje översättning
+					och styr ordvalet även för ord som inte står i ordlistan. Kostar inga extra tecken hos DeepL.
+				</p>
+				<textarea name="cotranslate_context" rows="3" class="large-text"
+					placeholder="T.ex. Text för ett svenskt fiskeri- och skaldjursföretag som säljer färsk och fryst fisk till grossister och restauranger. Använd handelns etablerade termer."><?php echo esc_textarea( $context ); ?></textarea>
+
+				<?php
+				foreach ( $enabled_languages as $lang ) :
+					if ( $lang === $default_language ) {
+						continue;
+					}
+					$data      = $supported[ $lang ] ?? array( 'native' => $lang, 'flag' => '' );
+					$label     = trim( ( $data['flag'] ?? '' ) . ' ' . ( $data['native'] ?? $lang ) );
+					$status    = CoTranslate_DeepL_Glossary::get_status( $lang );
+					$entries   = CoTranslate_Glossary::get_entries( $lang );
+					$conflicts = $requeue->find_manual_conflicts( $lang, array_keys( $entries ) );
+					?>
+					<div class="cotranslate-glossary-lang">
+						<h2><?php echo esc_html( $label ); ?></h2>
+						<textarea name="cotranslate_gl[<?php echo esc_attr( $lang ); ?>]" rows="8" class="large-text code"
+							placeholder="räka = prawn&#10;räkor = prawns&#10;torskrygg = cod loin"><?php echo esc_textarea( CoTranslate_Glossary::get_raw( $lang ) ); ?></textarea>
+						<p class="description">
+							En term per rad i formen <code>källterm = målterm</code>. Går även att klistra in två kolumner direkt från Excel.
+							DeepL matchar hela ord, så böjningar behöver egna rader (räka, räkor, räkan). Claude klarar böjningar själv.
+							Ord som står under "Översätt inte" skyddas och nås aldrig av ordlistan.
+						</p>
+
+						<?php if ( $engine_is_deepl ) : ?>
+							<p class="cotranslate-glossary-status">
+								<?php if ( '' !== $status['error'] ) : ?>
+									<span class="cotranslate-error">DeepL: <?php echo esc_html( $status['error'] ); ?></span>
+								<?php elseif ( '' !== $status['id'] ) : ?>
+									<span class="cotranslate-success">Synkad med DeepL <?php echo esc_html( wp_date( 'Y-m-d H:i', (int) $status['synced_at'] ) ); ?></span>
+								<?php elseif ( ! empty( $entries ) ) : ?>
+									<span class="cotranslate-error">Inte synkad med DeepL — spara för att synka.</span>
+								<?php else : ?>
+									<span class="description">Ingen ordlista för det här språket.</span>
+								<?php endif; ?>
+							</p>
+						<?php endif; ?>
+
+						<?php if ( ! empty( $conflicts['posts'] ) || ! empty( $conflicts['strings'] ) ) : ?>
+							<div class="cotranslate-glossary-conflicts">
+								<strong>Manuellt rättade texter som innehåller ord ur ordlistan</strong>
+								<p class="description">Dessa rörs inte automatiskt. Släpp rättningen om ordlistan ska gälla även här.</p>
+								<ul>
+									<?php foreach ( $conflicts['posts'] as $row ) : ?>
+										<li>
+											<span class="cotranslate-conflict-text" title="<?php echo esc_attr( $row['title'] ); ?>">Sida: <?php echo esc_html( $row['title'] ); ?></span>
+											<button type="button" class="button button-small cotranslate-glossary-release"
+												data-kind="post" data-id="<?php echo esc_attr( $row['post_id'] ); ?>" data-language="<?php echo esc_attr( $lang ); ?>">Släpp och översätt om</button>
+										</li>
+									<?php endforeach; ?>
+									<?php foreach ( $conflicts['strings'] as $row ) : ?>
+										<li>
+											<span class="cotranslate-conflict-text" title="<?php echo esc_attr( $row['source_text'] . ' → ' . $row['translated_text'] ); ?>"><?php echo esc_html( $row['source_text'] ); ?> → <?php echo esc_html( $row['translated_text'] ); ?></span>
+											<button type="button" class="button button-small cotranslate-glossary-release"
+												data-kind="string" data-id="<?php echo esc_attr( $row['id'] ); ?>" data-language="<?php echo esc_attr( $lang ); ?>">Släpp och översätt om</button>
+										</li>
+									<?php endforeach; ?>
+								</ul>
+							</div>
+						<?php endif; ?>
+					</div>
+				<?php endforeach; ?>
+
+				<?php if ( $engine_is_deepl ) : ?>
+					<p>
+						<label>
+							<input type="checkbox" name="cotranslate_glossary_resync" value="1" />
+							Skapa om alla ordlistor hos DeepL vid spar (använd om huvudspråket eller API-nyckeln bytts)
+						</label>
+					</p>
+				<?php endif; ?>
+
+				<p><button type="submit" class="button button-primary">Spara och översätt om berört innehåll</button></p>
+			</form>
+		</div>
+		<?php
+	}
+
+	/**
+	 * AJAX: Kör en omgång av omöversättningskön (poster + strängar).
+	 *
+	 * Anropas i loop från både adminsidan och frontend-editorn, därför
+	 * accepteras båda nonce-typerna och behörigheten är edit_posts.
+	 */
+	public function ajax_glossary_process() {
+		$nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
+		if ( ! wp_verify_nonce( $nonce, 'cotranslate_admin' ) && ! wp_verify_nonce( $nonce, 'cotranslate_frontend' ) ) {
+			wp_send_json_error( 'Ogiltig säkerhetstoken.' );
+		}
+
+		if ( ! current_user_can( 'edit_posts' ) ) {
+			wp_send_json_error( 'Otillräckliga behörigheter.' );
+		}
+
+		$requeue = new CoTranslate_Glossary_Requeue( $this->store );
+		$before  = $requeue->count_pending();
+		$after   = $requeue->process_batch();
+
+		// Ingen framgång (kvot slut, API-fel) — stoppa loopen i stället för att snurra.
+		if ( $after === $before && $after['posts'] + $after['strings'] > 0 ) {
+			wp_send_json_error( 'Kön går inte framåt just nu (kvot slut eller API-fel).' );
+		}
+
+		if ( 0 === $after['posts'] + $after['strings'] ) {
+			$plugin = CoTranslate_Plugin::get_instance();
+			if ( $plugin->frontend_editor ) {
+				$plugin->frontend_editor->purge_cache();
+			}
+		}
+
+		wp_send_json_success( $after );
+	}
+
+	/**
+	 * AJAX: Släpp en manuell rättning och köa för omöversättning.
+	 */
+	public function ajax_glossary_release() {
+		check_ajax_referer( 'cotranslate_admin', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( 'Otillräckliga behörigheter.' );
+		}
+
+		$kind     = isset( $_POST['kind'] ) ? sanitize_key( $_POST['kind'] ) : '';
+		$id       = isset( $_POST['id'] ) ? absint( $_POST['id'] ) : 0;
+		$language = isset( $_POST['language'] ) ? sanitize_key( $_POST['language'] ) : '';
+
+		if ( ! $id ) {
+			wp_send_json_error( 'Id saknas.' );
+		}
+
+		$requeue = new CoTranslate_Glossary_Requeue( $this->store );
+
+		if ( 'post' === $kind && '' !== $language ) {
+			$ok = $requeue->release_post( $id, $language );
+		} elseif ( 'string' === $kind ) {
+			$ok = $requeue->release_string( $id );
+		} else {
+			wp_send_json_error( 'Ogiltig typ.' );
+			return;
+		}
+
+		if ( ! $ok ) {
+			wp_send_json_error( 'Kunde inte släppa rättningen.' );
+		}
+
+		wp_send_json_success();
 	}
 
 	/**
@@ -1147,6 +1407,10 @@ class CoTranslate_Admin {
 		if ( isset( $_POST['api_key'] ) ) {
 			$key = sanitize_text_field( wp_unslash( $_POST['api_key'] ) );
 			if ( ! empty( $key ) && strpos( $key, '••' ) === false ) {
+				// Ordlistor hos DeepL hör till kontot — glöm id:n vid nyckelbyte
+				if ( $key !== cotranslate_get_api_key() ) {
+					CoTranslate_DeepL_Glossary::clear_ids();
+				}
 				cotranslate_save_api_key( $key );
 			}
 		}

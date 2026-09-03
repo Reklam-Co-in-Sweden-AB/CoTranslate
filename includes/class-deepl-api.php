@@ -224,7 +224,7 @@ class CoTranslate_DeepL_API implements CoTranslate_Translator {
 	 * @param bool   $html        Om true, aktivera tag_handling=html.
 	 * @return array|WP_Error Array med översatta texter eller WP_Error.
 	 */
-	private function call_api( array $texts, $source_lang, $target_lang, $html = false ) {
+	private function call_api( array $texts, $source_lang, $target_lang, $html = false, $use_glossary = true ) {
 		$api_key  = cotranslate_get_api_key();
 		$base_url = cotranslate_get_api_base_url();
 
@@ -237,6 +237,18 @@ class CoTranslate_DeepL_API implements CoTranslate_Translator {
 		if ( $html ) {
 			$body['tag_handling']    = 'html';
 			$body['split_sentences'] = 'nonewlines';
+		}
+
+		// Ordlista (DeepL glossary) för språkparet, om synkad.
+		$glossary_id = $use_glossary ? CoTranslate_DeepL_Glossary::get_id( $target_lang ) : '';
+		if ( '' !== $glossary_id ) {
+			$body['glossary_id'] = $glossary_id;
+		}
+
+		// Branschkontext — översätts inte, debiteras inte, men styr ordvalet.
+		$context = CoTranslate_Glossary::get_context();
+		if ( '' !== trim( $context ) ) {
+			$body['context'] = $context;
 		}
 
 		$response = wp_remote_post(
@@ -261,6 +273,13 @@ class CoTranslate_DeepL_API implements CoTranslate_Translator {
 
 		if ( 200 !== $code ) {
 			$message = isset( $data['message'] ) ? $data['message'] : 'DeepL API-fel (HTTP ' . $code . ')';
+
+			// Trasig eller borttagen ordlista får aldrig stoppa översättningen:
+			// glöm id:t och gör om anropet en gång utan ordlista.
+			if ( '' !== $glossary_id && in_array( $code, array( 400, 404 ), true ) && false !== stripos( $message, 'glossary' ) ) {
+				CoTranslate_DeepL_Glossary::forget_id( $target_lang, 'DeepL avvisade ordlistan: ' . $message . ' Spara ordlistan igen för att synka om.' );
+				return $this->call_api( $texts, $source_lang, $target_lang, $html, false );
+			}
 
 			// Specifika felkoder
 			if ( 456 === $code ) {

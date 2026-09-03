@@ -36,6 +36,7 @@ class CoTranslate_Frontend_Editor {
 		// AJAX-endpoints
 		add_action( 'wp_ajax_cotranslate_frontend_save', array( $this, 'ajax_save' ) );
 		add_action( 'wp_ajax_cotranslate_frontend_get', array( $this, 'ajax_get_translation' ) );
+		add_action( 'wp_ajax_cotranslate_frontend_source', array( $this, 'ajax_get_source' ) );
 	}
 
 	/**
@@ -70,6 +71,7 @@ class CoTranslate_Frontend_Editor {
 			'nonce'    => wp_create_nonce( 'cotranslate_frontend' ),
 			'language' => cotranslate_get_current_language(),
 			'postId'   => get_the_ID(),
+			'sourceLanguageName' => cotranslate_get_supported_languages()[ cotranslate_get_default_language() ]['native'] ?? cotranslate_get_default_language(),
 		) );
 	}
 
@@ -103,6 +105,22 @@ class CoTranslate_Frontend_Editor {
 				<div class="cotranslate-editor-field">
 					<label>Översättning</label>
 					<textarea id="cotranslate-editor-translation" rows="4"></textarea>
+				</div>
+
+				<div class="cotranslate-editor-field cotranslate-editor-glossary">
+					<label>Gäller överallt</label>
+					<p class="cotranslate-editor-hint">
+						Är det ett ord som är fel på hela sajten? Ange ordet på
+						<?php echo esc_html( cotranslate_get_supported_languages()[ cotranslate_get_default_language() ]['native'] ?? cotranslate_get_default_language() ); ?>
+						och vad det ska bli, så läggs det i ordlistan och alla berörda sidor översätts om.
+						Lämna tomt för att bara rätta den här texten.
+					</p>
+					<div id="cotranslate-editor-source-hint" class="cotranslate-editor-readonly" style="display:none;"></div>
+					<div class="cotranslate-editor-glossary-row">
+						<input type="text" id="cotranslate-editor-gl-source" placeholder="Ord i originalet" autocomplete="off" />
+						<span class="cotranslate-editor-glossary-sep">ska bli</span>
+						<input type="text" id="cotranslate-editor-gl-target" placeholder="Ny översättning" autocomplete="off" />
+					</div>
 				</div>
 
 				<input type="hidden" id="cotranslate-editor-type" value="" />
@@ -210,14 +228,46 @@ class CoTranslate_Frontend_Editor {
 			return;
 		}
 
-		if ( $result ) {
-			// Rensa cache efter sparning
-			$this->purge_cache();
-
-			wp_send_json_success( 'Översättning sparad som manuell override.' );
-		} else {
+		if ( ! $result ) {
 			wp_send_json_error( 'Kunde inte spara översättningen.' );
 		}
+
+		$response = array(
+			'message'  => 'Översättning sparad som manuell override.',
+			'requeued' => array( 'posts' => 0, 'strings' => 0 ),
+			'pending'  => array( 'posts' => 0, 'strings' => 0 ),
+		);
+
+		// "Gäller överallt": lägg termparet i ordlistan och köa berört innehåll
+		$gl_source = isset( $_POST['gl_source'] ) ? sanitize_text_field( wp_unslash( $_POST['gl_source'] ) ) : '';
+		$gl_target = isset( $_POST['gl_target'] ) ? sanitize_text_field( wp_unslash( $_POST['gl_target'] ) ) : '';
+
+		if ( '' !== $gl_source && '' !== $gl_target ) {
+			CoTranslate_Glossary::add_entry( $language, $gl_source, $gl_target );
+
+			if ( CoTranslate_Translator_Factory::get_current_engine() === CoTranslate_Translator_Factory::ENGINE_DEEPL ) {
+				$sync = CoTranslate_DeepL_Glossary::sync_language( $language );
+				if ( is_wp_error( $sync ) ) {
+					$response['message'] .= ' Ordlistan sparades men kunde inte synkas till DeepL: ' . $sync->get_error_message();
+				}
+			}
+
+			$requeue              = new CoTranslate_Glossary_Requeue( $this->store );
+			$response['requeued'] = $requeue->requeue( $language, array( $gl_source ) );
+			$response['pending']  = $requeue->count_pending();
+			$response['message']  = sprintf(
+				'Sparat. "%s" ska nu bli "%s" överallt. %d sidor och %d texter översätts om.',
+				$gl_source,
+				$gl_target,
+				$response['requeued']['posts'],
+				$response['requeued']['strings']
+			);
+		}
+
+		// Rensa cache efter sparning
+		$this->purge_cache();
+
+		wp_send_json_success( $response );
 	}
 
 	/**
@@ -226,7 +276,7 @@ class CoTranslate_Frontend_Editor {
 	 * Stöder LiteSpeed Cache, WP Super Cache, W3 Total Cache,
 	 * WP Rocket, WP Fastest Cache och Autoptimize.
 	 */
-	private function purge_cache() {
+	public function purge_cache() {
 		// LiteSpeed Cache
 		if ( class_exists( 'LiteSpeed_Cache_API' ) ) {
 			LiteSpeed_Cache_API::purge_all();
@@ -293,6 +343,46 @@ class CoTranslate_Frontend_Editor {
 			'slug'      => $translation->translated_slug,
 			'is_manual' => (bool) $translation->is_manual,
 		) );
+	}
+
+	/**
+	 * AJAX: Hämta originaltexten (huvudspråket) bakom en synlig text.
+	 *
+	 * Används av "Gäller överallt" så att redaktören ser vilket ord i
+	 * originalet som ska in i ordlistan.
+	 */
+	public function ajax_get_source() {
+		check_ajax_referer( 'cotranslate_frontend', 'nonce' );
+
+		if ( ! $this->can_edit() ) {
+			wp_send_json_error( 'Otillräckliga behörigheter.' );
+		}
+
+		$type     = isset( $_POST['type'] ) ? sanitize_key( $_POST['type'] ) : '';
+		$language = isset( $_POST['language'] ) ? sanitize_key( $_POST['language'] ) : '';
+		$visible  = isset( $_POST['source_text'] ) ? wp_unslash( $_POST['source_text'] ) : '';
+		$post_id  = isset( $_POST['post_id'] ) ? absint( $_POST['post_id'] ) : 0;
+
+		if ( 'post' === $type && $post_id > 0 ) {
+			$post = get_post( $post_id );
+			wp_send_json_success( array( 'source' => $post ? $post->post_title : '' ) );
+		}
+
+		if ( '' === $visible || '' === $language ) {
+			wp_send_json_success( array( 'source' => '' ) );
+		}
+
+		global $wpdb;
+		$table = $wpdb->prefix . 'cotranslate_strings';
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$source = $wpdb->get_var( $wpdb->prepare(
+			"SELECT source_text FROM {$table} WHERE translated_text = %s AND language = %s LIMIT 1",
+			$visible,
+			$language
+		) );
+
+		wp_send_json_success( array( 'source' => (string) $source ) );
 	}
 
 	/**

@@ -217,14 +217,18 @@ class CoTranslate_Claude_API implements CoTranslate_Translator {
 		$source_name = $languages[ $source_lang ]['name'] ?? $source_lang;
 		$target_name = $languages[ $target_lang ]['name'] ?? $target_lang;
 
-		// Hämta valfri stil-instruktion
-		$custom_prompt = get_option( 'cotranslate_claude_prompt', '' );
+		// Hämta valfri stil-instruktion samt ordlista/kontext för målspråket
+		$custom_prompt  = get_option( 'cotranslate_claude_prompt', '' );
+		$glossary_block = CoTranslate_Glossary::build_prompt_block(
+			CoTranslate_Glossary::get_context(),
+			CoTranslate_Glossary::get_entries( $target_lang )
+		);
 
 		// Bygg prompt
 		if ( count( $texts ) === 1 ) {
-			$prompt = $this->build_single_prompt( $texts[0], $source_name, $target_name, $is_html, $custom_prompt );
+			$prompt = $this->build_single_prompt( $texts[0], $source_name, $target_name, $is_html, $custom_prompt, $glossary_block );
 		} else {
-			$prompt = $this->build_batch_prompt( $texts, $source_name, $target_name, $custom_prompt );
+			$prompt = $this->build_batch_prompt( $texts, $source_name, $target_name, $custom_prompt, $glossary_block );
 		}
 
 		$response = wp_remote_post(
@@ -276,7 +280,7 @@ class CoTranslate_Claude_API implements CoTranslate_Translator {
 	/**
 	 * Bygg prompt för enskild text.
 	 */
-	private function build_single_prompt( $text, $source_name, $target_name, $is_html, $custom_prompt ) {
+	private function build_single_prompt( $text, $source_name, $target_name, $is_html, $custom_prompt, $glossary_block = '' ) {
 		$prompt = "Translate the following from {$source_name} to {$target_name}.";
 
 		if ( $is_html ) {
@@ -291,6 +295,9 @@ class CoTranslate_Claude_API implements CoTranslate_Translator {
 			$prompt .= "\n\nAdditional instructions: " . $custom_prompt;
 		}
 
+		// Ordlista och branschkontext (tom sträng om inget är angivet)
+		$prompt .= $glossary_block;
+
 		$prompt .= "\n\nText to translate:\n" . $text;
 
 		return $prompt;
@@ -301,7 +308,7 @@ class CoTranslate_Claude_API implements CoTranslate_Translator {
 	 *
 	 * Använder JSON-format istället för numrering (säkrare parsning).
 	 */
-	private function build_batch_prompt( array $texts, $source_name, $target_name, $custom_prompt ) {
+	private function build_batch_prompt( array $texts, $source_name, $target_name, $custom_prompt, $glossary_block = '' ) {
 		$prompt  = "Translate the following texts from {$source_name} to {$target_name}.\n";
 		$prompt .= "Output a JSON array with the translations in the same order. No explanations.\n";
 		$prompt .= "Example output: [\"translation 1\", \"translation 2\"]\n";
@@ -309,6 +316,11 @@ class CoTranslate_Claude_API implements CoTranslate_Translator {
 
 		if ( ! empty( $custom_prompt ) ) {
 			$prompt .= "\nAdditional instructions: " . $custom_prompt . "\n";
+		}
+
+		// Ordlista och branschkontext (tom sträng om inget är angivet)
+		if ( '' !== $glossary_block ) {
+			$prompt .= $glossary_block . "\n";
 		}
 
 		$prompt .= "\nTexts to translate:\n";

@@ -220,3 +220,59 @@
 		display: none;
 	}
 }
+
+/* "Gäller överallt" — ordlista från editorn */
+.cotranslate-editor-glossary {
+	padding: 14px;
+	background: #f4f8fb;
+	border: 1px solid #d5e3ee;
+	border-radius: 8px;
+}
+
+.cotranslate-editor-hint {
+	margin: 0 0 10px 0;
+	font-size: 13px;
+	line-height: 1.5;
+	color: #555;
+}
+
+.cotranslate-editor-glossary #cotranslate-editor-source-hint {
+	margin-bottom: 10px;
+	font-size: 13px;
+}
+
+.cotranslate-editor-glossary-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.cotranslate-editor-glossary-row input {
+	flex: 1;
+	min-width: 0;
+	padding: 8px 12px;
+	border: 1px solid #ddd;
+	border-radius: 6px;
+	font-size: 14px;
+	font-family: inherit;
+	box-sizing: border-box;
+}
+
+.cotranslate-editor-glossary-row input:focus {
+	outline: none;
+	border-color: #0073aa;
+	box-shadow: 0 0 0 2px rgba(0, 115, 170, 0.2);
+}
+
+.cotranslate-editor-glossary-sep {
+	font-size: 13px;
+	color: #666;
+	white-space: nowrap;
+}
+
+@media (max-width: 480px) {
+	.cotranslate-editor-glossary-row {
+		flex-direction: column;
+		align-items: stretch;
+	}
+}

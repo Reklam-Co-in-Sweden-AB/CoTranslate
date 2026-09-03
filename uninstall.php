@@ -38,6 +38,10 @@ $options = array(
 	'cotranslate_domain_language_map',
 	'cotranslate_menu_switcher_location',
 	'cotranslate_excluded_posts',
+	'cotranslate_no_translate_terms',
+	'cotranslate_glossary_terms',
+	'cotranslate_translation_context',
+	'cotranslate_deepl_glossary_ids',
 	'cotranslate_delete_data_on_uninstall',
 	'cotranslate_db_version',
 );
@@ -48,6 +52,7 @@ foreach ( $options as $option ) {
 
 // Radera transients
 delete_transient( 'cotranslate_deepl_usage' );
+delete_transient( 'cotranslate_deepl_glossary_pairs' );
 
 // Rensa cron
 wp_clear_scheduled_hook( 'cotranslate_process_queue' );

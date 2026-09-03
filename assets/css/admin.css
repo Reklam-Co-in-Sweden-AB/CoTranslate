@@ -170,3 +170,45 @@
 .cotranslate-usage-fill.danger {
 	background: #ed7354;
 }
+
+/* Ordlista */
+.cotranslate-glossary-lang {
+	margin-bottom: 28px;
+}
+
+.cotranslate-glossary-status {
+	margin: 6px 0 0 0;
+	font-size: 12px;
+}
+
+.cotranslate-glossary-conflicts {
+	margin-top: 10px;
+	padding: 10px 14px;
+	background: #fff8e5;
+	border: 1px solid #f0c36d;
+	border-radius: 4px;
+}
+
+.cotranslate-glossary-conflicts ul {
+	margin: 6px 0 0 0;
+}
+
+.cotranslate-glossary-conflicts li {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 6px;
+}
+
+.cotranslate-glossary-conflicts li .cotranslate-conflict-text {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+#cotranslate-glossary-progress {
+	margin: 16px 0;
+	max-width: 600px;
+}

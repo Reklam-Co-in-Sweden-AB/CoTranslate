@@ -570,6 +570,14 @@ class CoTranslate_Translation_Store {
 	}
 
 	/**
+	 * Töm request-cachen för strängar (efter direkta DB-uppdateringar).
+	 */
+	public function clear_string_cache() {
+		self::$string_cache        = array();
+		self::$string_cache_loaded = array();
+	}
+
+	/**
 	 * Hämta statistik för strängöversättningar.
 	 *
 	 * @return array Array med statistik per språk.

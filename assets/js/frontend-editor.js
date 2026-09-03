@@ -3,12 +3,15 @@
  *
  * Tillåter visuell redigering av översättningar direkt på sajten.
  * Sparar via AJAX till samma Translation Store som admin-panelen.
+ * "Gäller överallt" lägger ett termpar i ordlistan och översätter om
+ * berört innehåll innan sidan laddas om.
  */
 (function () {
 	'use strict';
 
 	var editMode = false;
 	var editableElements = [];
+	var glTargetTouched = false; // true när användaren själv skrivit i "Ska bli"
 
 	document.addEventListener('DOMContentLoaded', function () {
 		var toggleBtn = document.getElementById('cotranslate-edit-mode-btn');
@@ -43,6 +46,21 @@
 		var saveBtn = document.getElementById('cotranslate-editor-save');
 		if (saveBtn) {
 			saveBtn.addEventListener('click', saveTranslation);
+		}
+
+		// Förifyll "Ska bli" när bara ett ord/kort fras ändrats i översättningen
+		var translationEl = document.getElementById('cotranslate-editor-translation');
+		var glTargetEl = document.getElementById('cotranslate-editor-gl-target');
+		if (translationEl && glTargetEl) {
+			translationEl.addEventListener('input', function () {
+				if (glTargetTouched) return;
+				var original = document.getElementById('cotranslate-editor-source-text').value;
+				var suggestion = suggestChangedPhrase(original, translationEl.value);
+				glTargetEl.value = suggestion || '';
+			});
+			glTargetEl.addEventListener('input', function () {
+				glTargetTouched = glTargetEl.value !== '';
+			});
 		}
 	});
 
@@ -131,6 +149,14 @@
 		document.getElementById('cotranslate-editor-source-text').value = currentText;
 		document.getElementById('cotranslate-editor-status').innerHTML = '';
 
+		// Nollställ "Gäller överallt"
+		glTargetTouched = false;
+		document.getElementById('cotranslate-editor-gl-source').value = '';
+		document.getElementById('cotranslate-editor-gl-target').value = '';
+		var hintEl = document.getElementById('cotranslate-editor-source-hint');
+		hintEl.style.display = 'none';
+		hintEl.textContent = '';
+
 		// Uppdatera modal-titel baserat på typ
 		var titleEl = document.getElementById('cotranslate-editor-modal-title');
 		if (titleEl) {
@@ -139,6 +165,31 @@
 
 		modal.style.display = 'flex';
 		document.getElementById('cotranslate-editor-translation').focus();
+
+		fetchSourceHint(currentText, type, postId);
+	}
+
+	/**
+	 * Visa originaltexten (huvudspråket) som stöd för att välja rätt ord.
+	 */
+	function fetchSourceHint(visibleText, type, postId) {
+		var data = new FormData();
+		data.append('action', 'cotranslate_frontend_source');
+		data.append('nonce', cotranslateFrontend.nonce);
+		data.append('type', type);
+		data.append('post_id', postId);
+		data.append('language', cotranslateFrontend.language);
+		data.append('source_text', visibleText);
+
+		fetch(cotranslateFrontend.ajaxUrl, { method: 'POST', body: data, credentials: 'same-origin' })
+			.then(function (r) { return r.json(); })
+			.then(function (result) {
+				if (!result.success || !result.data.source || result.data.source === visibleText) return;
+				var hintEl = document.getElementById('cotranslate-editor-source-hint');
+				hintEl.textContent = cotranslateFrontend.sourceLanguageName + ': ' + result.data.source;
+				hintEl.style.display = 'block';
+			})
+			.catch(function () { /* tyst — hinten är bara ett stöd */ });
 	}
 
 	function closeModal() {
@@ -148,6 +199,15 @@
 
 	function saveTranslation() {
 		var statusEl = document.getElementById('cotranslate-editor-status');
+		var glSource = document.getElementById('cotranslate-editor-gl-source').value.trim();
+		var glTarget = document.getElementById('cotranslate-editor-gl-target').value.trim();
+
+		// Båda eller inget i "Gäller överallt"
+		if ((glSource && !glTarget) || (!glSource && glTarget)) {
+			statusEl.innerHTML = '<span class="cotranslate-editor-error">Fyll i både ordet i originalet och vad det ska bli, eller lämna båda tomma.</span>';
+			return;
+		}
+
 		statusEl.innerHTML = '<span class="cotranslate-editor-success">Sparar...</span>';
 
 		var type = document.getElementById('cotranslate-editor-type').value;
@@ -159,6 +219,8 @@
 		data.append('type', type);
 		data.append('language', cotranslateFrontend.language);
 		data.append('value', value);
+		data.append('gl_source', glSource);
+		data.append('gl_target', glTarget);
 
 		if (type === 'post') {
 			data.append('post_id', document.getElementById('cotranslate-editor-post-id').value);
@@ -174,23 +236,88 @@
 		})
 		.then(function (response) { return response.json(); })
 		.then(function (result) {
-			if (result.success) {
-				statusEl.innerHTML = '<span class="cotranslate-editor-success">' + result.data + '</span>';
-				setTimeout(function () {
-					closeModal();
-					// Ladda om med cache-bust för att kringgå servercache
-					var url = window.location.href.split('?')[0];
-					var params = new URLSearchParams(window.location.search);
-					params.set('nocache', Date.now());
-					window.location.href = url + '?' + params.toString();
-				}, 800);
-			} else {
+			if (!result.success) {
 				statusEl.innerHTML = '<span class="cotranslate-editor-error">' + result.data + '</span>';
+				return;
+			}
+
+			var d = result.data;
+			statusEl.innerHTML = '<span class="cotranslate-editor-success">' + d.message + '</span>';
+
+			var pending = d.pending ? (d.pending.posts + d.pending.strings) : 0;
+			if (pending > 0) {
+				processQueue(statusEl, reloadPage);
+			} else {
+				setTimeout(reloadPage, 800);
 			}
 		})
 		.catch(function () {
 			statusEl.innerHTML = '<span class="cotranslate-editor-error">Nätverksfel.</span>';
 		});
+	}
+
+	/**
+	 * Kör omöversättningskön i förgrunden tills den är tom, sedan callback.
+	 */
+	function processQueue(statusEl, done) {
+		var data = new FormData();
+		data.append('action', 'cotranslate_glossary_process');
+		data.append('nonce', cotranslateFrontend.nonce);
+
+		fetch(cotranslateFrontend.ajaxUrl, { method: 'POST', body: data, credentials: 'same-origin' })
+			.then(function (r) { return r.json(); })
+			.then(function (result) {
+				if (!result.success) {
+					statusEl.innerHTML = '<span class="cotranslate-editor-error">' + result.data + ' Resten översätts i bakgrunden.</span>';
+					setTimeout(done, 1500);
+					return;
+				}
+				var left = result.data.posts + result.data.strings;
+				if (left > 0) {
+					statusEl.innerHTML = '<span class="cotranslate-editor-success">Översätter om... ' +
+						result.data.posts + ' sidor och ' + result.data.strings + ' texter kvar.</span>';
+					processQueue(statusEl, done);
+				} else {
+					statusEl.innerHTML = '<span class="cotranslate-editor-success">Klart! Laddar om sidan...</span>';
+					setTimeout(done, 600);
+				}
+			})
+			.catch(function () {
+				statusEl.innerHTML = '<span class="cotranslate-editor-error">Nätverksfel. Resten översätts i bakgrunden.</span>';
+				setTimeout(done, 1500);
+			});
+	}
+
+	function reloadPage() {
+		closeModal();
+		// Ladda om med cache-bust för att kringgå servercache
+		var url = window.location.href.split('?')[0];
+		var params = new URLSearchParams(window.location.search);
+		params.set('nocache', Date.now());
+		window.location.href = url + '?' + params.toString();
+	}
+
+	/**
+	 * Föreslå den ändrade frasen: skala bort gemensamt prefix och suffix på
+	 * ordnivå. Returnerar den nya frasen om den är 1–3 ord, annars tom sträng.
+	 */
+	function suggestChangedPhrase(before, after) {
+		var a = before.trim().split(/\s+/);
+		var b = after.trim().split(/\s+/);
+		if (!before.trim() || !after.trim() || before === after) return '';
+
+		var start = 0;
+		while (start < a.length && start < b.length && a[start] === b[start]) start++;
+
+		var endA = a.length - 1;
+		var endB = b.length - 1;
+		while (endA >= start && endB >= start && a[endA] === b[endB]) { endA--; endB--; }
+
+		var changed = b.slice(start, endB + 1);
+		if (changed.length < 1 || changed.length > 3) return '';
+
+		// Ta bort omgivande skiljetecken
+		return changed.join(' ').replace(/^[\s.,;:!?"'()]+|[\s.,;:!?"'()]+$/g, '');
 	}
 
 	/**

@@ -664,3 +664,66 @@
 	});
 
 })(jQuery);
+
+/**
+ * Ordlista: omöversättningsloop och släpp av manuella rättningar.
+ */
+(function ($) {
+	'use strict';
+
+	var $progress = $('#cotranslate-glossary-progress');
+	if (!$progress.length) return;
+
+	function processQueue() {
+		$.post(cotranslateAdmin.ajaxUrl, {
+			action: 'cotranslate_glossary_process',
+			nonce: cotranslateAdmin.nonce
+		}, function (response) {
+			if (!response.success) {
+				$('#cotranslate-glossary-progress-text').html('<span class="cotranslate-error">' + response.data + ' Resten översätts i bakgrunden.</span>');
+				return;
+			}
+			var left = response.data.posts + response.data.strings;
+			if (left > 0) {
+				$('#cotranslate-glossary-progress-text').text(
+					'Översätter om... ' + response.data.posts + ' sidor och ' + response.data.strings + ' texter kvar.'
+				);
+				processQueue();
+			} else {
+				$('#cotranslate-glossary-progress-text').html('<span class="cotranslate-success">Klart! Allt berört innehåll är omöversatt.</span>');
+				$('#cotranslate-glossary-bar').css('width', '100%');
+			}
+		}).fail(function () {
+			$('#cotranslate-glossary-progress-text').html('<span class="cotranslate-error">Nätverksfel. Resten översätts i bakgrunden.</span>');
+		});
+	}
+
+	// Starta loopen automatiskt om något köades vid senaste spar
+	if (parseInt($progress.data('pending'), 10) > 0) {
+		processQueue();
+	}
+
+	// Släpp manuell rättning och översätt om
+	$(document).on('click', '.cotranslate-glossary-release', function () {
+		var $btn = $(this);
+		$btn.prop('disabled', true).text('Släpper...');
+
+		$.post(cotranslateAdmin.ajaxUrl, {
+			action: 'cotranslate_glossary_release',
+			nonce: cotranslateAdmin.nonce,
+			kind: $btn.data('kind'),
+			id: $btn.data('id'),
+			language: $btn.data('language')
+		}, function (response) {
+			if (response.success) {
+				$btn.closest('li').fadeOut(200, function () { $(this).remove(); });
+				$progress.show();
+				$('#cotranslate-glossary-progress-text').text('Översätter om...');
+				processQueue();
+			} else {
+				$btn.prop('disabled', false).text('Släpp och översätt om');
+				$btn.after('<span class="cotranslate-error"> ' + response.data + '</span>');
+			}
+		});
+	});
+})(jQuery);
