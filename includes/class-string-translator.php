@@ -573,8 +573,9 @@ class CoTranslate_String_Translator {
 			// Hämta strängar som saknar översättning
 			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 			$pending = $wpdb->get_results( $wpdb->prepare(
-				"SELECT id, source_text FROM {$table}
+				"SELECT id, source_text, first_seen_post_id FROM {$table}
 				 WHERE language = %s AND translated_text = '' AND is_manual = 0
+				 ORDER BY first_seen_post_id, id
 				 LIMIT 50",
 				$language
 			) );
@@ -600,42 +601,54 @@ class CoTranslate_String_Translator {
 				continue;
 			}
 
-			$texts = array_values( wp_list_pluck( $pending, 'source_text' ) );
-
-			$result = $this->api->translate_text( $texts, $default_language, $language );
-
-			if ( is_wp_error( $result ) ) {
-				// Spara felet så att "Kör kön nu" kan visa varför kön står stilla
-				// i stället för att gissa mellan kvot och API-fel.
-				set_transient( 'cotranslate_last_queue_error', $result->get_error_message(), 10 * MINUTE_IN_SECONDS );
-				continue;
+			// Gruppera per sida så att motorn får sidtitel och grannar som
+			// sammanhang. Texter utan känd sida (äldre rader) hamnar i grupp 0
+			// och får bara den globala kontexten.
+			$groups = array();
+			foreach ( $pending as $row ) {
+				$groups[ (int) $row->first_seen_post_id ][] = $row->source_text;
 			}
-			delete_transient( 'cotranslate_last_queue_error' );
 
-			// Spara översättningarna
-			foreach ( $result as $i => $translated_text ) {
-				if ( ! isset( $texts[ $i ] ) ) {
+			foreach ( $groups as $post_id => $texts ) {
+				$texts = array_values( $texts );
+
+				CoTranslate_Glossary::set_page_context( CoTranslate_Glossary::build_page_context( $post_id, $texts ) );
+				$result = $this->api->translate_text( $texts, $default_language, $language );
+				CoTranslate_Glossary::clear_page_context();
+
+				if ( is_wp_error( $result ) ) {
+					// Spara felet så att "Kör kön nu" kan visa varför kön står stilla
+					// i stället för att gissa mellan kvot och API-fel.
+					set_transient( 'cotranslate_last_queue_error', $result->get_error_message(), 10 * MINUTE_IN_SECONDS );
 					continue;
 				}
+				delete_transient( 'cotranslate_last_queue_error' );
 
-				$translated_text = is_string( $translated_text ) ? $translated_text : '';
+				// Spara översättningarna
+				foreach ( $result as $i => $translated_text ) {
+					if ( ! isset( $texts[ $i ] ) ) {
+						continue;
+					}
 
-				// Tomt svar (t.ex. en sträng utan synliga tecken) sparas som
-				// källtexten. Tidigare sparades inget alls, och strängen låg då
-				// kvar som väntande för evigt, vilket fick "Kör kön nu" att
-				// stanna med "kvot slut eller API-fel" trots att allt annat
-				// var översatt. Synligt blir det ingen skillnad: väntande
-				// strängar visar redan källtexten.
-				if ( '' === trim( $translated_text ) ) {
-					$translated_text = $texts[ $i ];
+					$translated_text = is_string( $translated_text ) ? $translated_text : '';
+
+					// Tomt svar (t.ex. en sträng utan synliga tecken) sparas som
+					// källtexten. Tidigare sparades inget alls, och strängen låg då
+					// kvar som väntande för evigt, vilket fick "Kör kön nu" att
+					// stanna med "kvot slut eller API-fel" trots att allt annat
+					// var översatt. Synligt blir det ingen skillnad: väntande
+					// strängar visar redan källtexten.
+					if ( '' === trim( $translated_text ) ) {
+						$translated_text = $texts[ $i ];
+					}
+
+					$this->store->save_string_translation(
+						$texts[ $i ],
+						$language,
+						$translated_text,
+						'general'
+					);
 				}
-
-				$this->store->save_string_translation(
-					$texts[ $i ],
-					$language,
-					$translated_text,
-					'general'
-				);
 			}
 		}
 	}

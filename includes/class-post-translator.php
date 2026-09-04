@@ -137,6 +137,17 @@ class CoTranslate_Post_Translator {
 		$default_language = cotranslate_get_default_language();
 		$chars_used       = 0;
 
+		// Titel, utdrag och slug är korta och tvetydiga på egen hand
+		// ("Trimguide" blev "Fitness Guide"). Ge motorn ett utdrag av sidans
+		// egen text som sammanhang. Nollställs längst ned i metoden.
+		$body_excerpt = trim( wp_strip_all_tags( strip_shortcodes( $post->post_content ) ) );
+		$body_excerpt = preg_replace( '/\s+/u', ' ', $body_excerpt );
+		if ( '' !== $body_excerpt ) {
+			CoTranslate_Glossary::set_page_context(
+				'This text is the title or summary of a web page whose content begins: "' . mb_substr( $body_excerpt, 0, 800 ) . '"'
+			);
+		}
+
 		// Kontrollera om innehållet har page builder-shortcodes.
 		// Om ja, översätt bara titel/excerpt/slug — inte content.
 		// Content hanteras av String Translator (output buffer) istället.
@@ -198,6 +209,8 @@ class CoTranslate_Post_Translator {
 				$chars_used     += mb_strlen( $post->post_name );
 			}
 		}
+
+		CoTranslate_Glossary::clear_page_context();
 
 		// Spara via Translation Store (respekterar is_manual)
 		$data = array(

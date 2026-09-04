@@ -209,6 +209,91 @@ class CoTranslate_Glossary {
 	}
 
 	/**
+	 * Sidkontext för pågående batch: sidtitel och grannar på samma sida.
+	 *
+	 * Korta texter (rubriker, produktattribut, knappar) översätts annars helt
+	 * utan sammanhang — "Foretrekker du å skrive?" på en kontaktsida blev
+	 * "Do you like to write?". Sätts av köerna runt varje anrop och läses av
+	 * motorerna via get_translation_context().
+	 *
+	 * @var string
+	 */
+	private static $page_context = '';
+
+	/**
+	 * Sätt sidkontext för kommande anrop.
+	 *
+	 * @param string $text Kontext, tom sträng för att nollställa.
+	 */
+	public static function set_page_context( $text ) {
+		self::$page_context = trim( (string) $text );
+	}
+
+	/**
+	 * Nollställ sidkontexten.
+	 */
+	public static function clear_page_context() {
+		self::$page_context = '';
+	}
+
+	/**
+	 * Den kontext motorerna ska få: global branschkontext + ev. sidkontext.
+	 *
+	 * @return string
+	 */
+	public static function get_translation_context() {
+		$parts = array();
+		if ( '' !== trim( self::get_context() ) ) {
+			$parts[] = trim( self::get_context() );
+		}
+		if ( '' !== self::$page_context ) {
+			$parts[] = self::$page_context;
+		}
+		return implode( "\n\n", $parts );
+	}
+
+	/**
+	 * Bygg sidkontext av en sidas titel och de texter som ska översättas
+	 * tillsammans med den. Skrivs på engelska eftersom det är instruktion
+	 * till motorn, inte innehåll.
+	 *
+	 * @param int   $post_id Sidan texterna hittades på (0 = okänd).
+	 * @param array $texts   Texter i samma batch.
+	 * @param int   $limit   Maxlängd i tecken för grannarna.
+	 * @return string Tom sträng om inget sammanhang finns.
+	 */
+	public static function build_page_context( $post_id, array $texts = array(), $limit = 1500 ) {
+		$parts = array();
+
+		$post_id = (int) $post_id;
+		if ( $post_id > 0 ) {
+			$title = get_the_title( $post_id );
+			if ( '' !== $title ) {
+				$parts[] = 'These texts appear on the web page titled "' . wp_strip_all_tags( $title ) . '".';
+			}
+		}
+
+		$neighbors = array();
+		$length    = 0;
+		foreach ( $texts as $text ) {
+			$text = trim( wp_strip_all_tags( (string) $text ) );
+			if ( '' === $text ) {
+				continue;
+			}
+			if ( $length + mb_strlen( $text ) > $limit ) {
+				break;
+			}
+			$neighbors[] = $text;
+			$length     += mb_strlen( $text );
+		}
+		if ( count( $neighbors ) > 1 ) {
+			$parts[] = 'Other texts on the same page, for context only: ' . implode( ' | ', $neighbors );
+		}
+
+		return implode( ' ', $parts );
+	}
+
+	/**
 	 * Jämför två termuppsättningar och returnera källtermer som ändrats:
 	 * nya, med ny målterm eller borttagna.
 	 *

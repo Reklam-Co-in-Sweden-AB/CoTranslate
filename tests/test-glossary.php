@@ -66,5 +66,26 @@ sort( $changed );
 check( 'changed_terms hittar ny, ändrad och borttagen', $changed, array( 'lax', 'räka', 'sej' ) );
 check( 'changed_terms tomt vid identiskt', CoTranslate_Glossary::changed_terms( $entries, $entries ), array() );
 
+// Sidkontext: global kontext + sidtitel + grannar, och nollställning.
+function get_option( $k, $d = '' ) { return 'Seafood supplier.'; }
+function get_the_title( $id ) { return 7 === $id ? 'Kontakt' : ''; }
+function wp_strip_all_tags( $s ) { return strip_tags( $s ); }
+
+check( 'utan sidkontext = bara global', CoTranslate_Glossary::get_translation_context(), 'Seafood supplier.' );
+
+$ctx = CoTranslate_Glossary::build_page_context( 7, array( 'Send en melding', 'Foretrekker du å skrive?', '<b>Ring oss</b>' ) );
+check( 'sidkontext med titel och grannar', $ctx, 'These texts appear on the web page titled "Kontakt". Other texts on the same page, for context only: Send en melding | Foretrekker du å skrive? | Ring oss' );
+
+check( 'okänd sida och ensam text ger tom kontext', CoTranslate_Glossary::build_page_context( 0, array( 'Trimguide' ) ), '' );
+
+CoTranslate_Glossary::set_page_context( $ctx );
+check( 'kombinerad kontext', CoTranslate_Glossary::get_translation_context(), "Seafood supplier.\n\n" . $ctx );
+CoTranslate_Glossary::clear_page_context();
+check( 'nollställd sidkontext', CoTranslate_Glossary::get_translation_context(), 'Seafood supplier.' );
+
+// Grannar kapas vid längdgränsen, titeln behålls.
+$long = CoTranslate_Glossary::build_page_context( 7, array( str_repeat( 'a', 20 ), str_repeat( 'b', 20 ) ), 30 );
+check( 'grannar kapas vid gräns', $long, 'These texts appear on the web page titled "Kontakt".' );
+
 echo $fails ? "\n$fails test misslyckades\n" : "\nAlla test gröna\n";
 exit( $fails ? 1 : 0 );

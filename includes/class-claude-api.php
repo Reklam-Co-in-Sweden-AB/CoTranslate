@@ -220,7 +220,7 @@ class CoTranslate_Claude_API implements CoTranslate_Translator {
 		// Hämta valfri stil-instruktion samt ordlista/kontext för målspråket
 		$custom_prompt  = get_option( 'cotranslate_claude_prompt', '' );
 		$glossary_block = CoTranslate_Glossary::build_prompt_block(
-			CoTranslate_Glossary::get_context(),
+			CoTranslate_Glossary::get_translation_context(),
 			CoTranslate_Glossary::get_entries( $target_lang )
 		);
 

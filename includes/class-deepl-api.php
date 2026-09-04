@@ -246,7 +246,7 @@ class CoTranslate_DeepL_API implements CoTranslate_Translator {
 		}
 
 		// Branschkontext — översätts inte, debiteras inte, men styr ordvalet.
-		$context = CoTranslate_Glossary::get_context();
+		$context = CoTranslate_Glossary::get_translation_context();
 		if ( '' !== trim( $context ) ) {
 			$body['context'] = $context;
 		}
