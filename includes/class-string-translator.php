@@ -588,19 +588,37 @@ class CoTranslate_String_Translator {
 			$result = $this->api->translate_text( $texts, $default_language, $language );
 
 			if ( is_wp_error( $result ) ) {
+				// Spara felet så att "Kör kön nu" kan visa varför kön står stilla
+				// i stället för att gissa mellan kvot och API-fel.
+				set_transient( 'cotranslate_last_queue_error', $result->get_error_message(), 10 * MINUTE_IN_SECONDS );
 				continue;
 			}
+			delete_transient( 'cotranslate_last_queue_error' );
 
 			// Spara översättningarna
 			foreach ( $result as $i => $translated_text ) {
-				if ( isset( $texts[ $i ] ) && ! empty( $translated_text ) ) {
-					$this->store->save_string_translation(
-						$texts[ $i ],
-						$language,
-						$translated_text,
-						'general'
-					);
+				if ( ! isset( $texts[ $i ] ) ) {
+					continue;
 				}
+
+				$translated_text = is_string( $translated_text ) ? $translated_text : '';
+
+				// Tomt svar (t.ex. en sträng utan synliga tecken) sparas som
+				// källtexten. Tidigare sparades inget alls, och strängen låg då
+				// kvar som väntande för evigt, vilket fick "Kör kön nu" att
+				// stanna med "kvot slut eller API-fel" trots att allt annat
+				// var översatt. Synligt blir det ingen skillnad: väntande
+				// strängar visar redan källtexten.
+				if ( '' === trim( $translated_text ) ) {
+					$translated_text = $texts[ $i ];
+				}
+
+				$this->store->save_string_translation(
+					$texts[ $i ],
+					$language,
+					$translated_text,
+					'general'
+				);
 			}
 		}
 	}

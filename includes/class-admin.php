@@ -437,6 +437,10 @@ class CoTranslate_Admin {
 
 		// Ingen framgång (kvot slut, API-fel) — stoppa loopen i stället för att snurra.
 		if ( $after === $before && $after['posts'] + $after['strings'] > 0 ) {
+			$reason = get_transient( 'cotranslate_last_queue_error' );
+			if ( $reason ) {
+				wp_send_json_error( 'Kön går inte framåt: ' . esc_html( $reason ) );
+			}
 			wp_send_json_error( 'Kön går inte framåt just nu (kvot slut eller API-fel).' );
 		}
 
