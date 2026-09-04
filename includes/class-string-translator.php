@@ -583,7 +583,24 @@ class CoTranslate_String_Translator {
 				continue;
 			}
 
-			$texts = wp_list_pluck( $pending, 'source_text' );
+			// Rader utan innehåll (bara blanksteg) kan aldrig lämna kön: MySQL
+			// räknar en sträng av mellanslag som lika med tom sträng, så även en
+			// sparad "översättning" ser ut som väntande. Radera dem i stället.
+			// Sådana rader kommer från äldre versioner; skannern släpper inte
+			// igenom dem längre.
+			foreach ( $pending as $key => $row ) {
+				if ( '' === trim( (string) $row->source_text ) ) {
+					// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+					$wpdb->query( $wpdb->prepare( "DELETE FROM {$table} WHERE id = %d", (int) $row->id ) );
+					unset( $pending[ $key ] );
+				}
+			}
+
+			if ( empty( $pending ) ) {
+				continue;
+			}
+
+			$texts = array_values( wp_list_pluck( $pending, 'source_text' ) );
 
 			$result = $this->api->translate_text( $texts, $default_language, $language );
 
