@@ -26,6 +26,15 @@ class CoTranslate_Translation_Store {
 	private static $string_cache = array();
 	private static $string_cache_loaded = array();
 
+	/**
+	 * Kända strängar per språk som saknar sida (first_seen_post_id 0/NULL).
+	 * Fylls i av load_all_strings() och används för att registrera sidan i
+	 * efterhand när strängen ses på en sidvisning eller vid skanning.
+	 *
+	 * @var array språk => array( source_text => true )
+	 */
+	private static $string_unplaced = array();
+
 	public function __construct() {
 		global $wpdb;
 		$this->table_translations = $wpdb->prefix . 'cotranslate_translations';
@@ -508,21 +517,81 @@ class CoTranslate_Translation_Store {
 
 		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$rows = $wpdb->get_results( $wpdb->prepare(
-			"SELECT source_hash, source_text, translated_text FROM {$this->table_strings} WHERE language = %s",
+			"SELECT source_hash, source_text, translated_text, first_seen_post_id FROM {$this->table_strings} WHERE language = %s",
 			$language
 		) );
 
-		self::$string_cache[ $language ] = array();
-		$source_map                      = array();
+		self::$string_cache[ $language ]    = array();
+		self::$string_unplaced[ $language ] = array();
+		$source_map                         = array();
 
 		foreach ( $rows as $row ) {
 			self::$string_cache[ $language ][ $row->source_hash ] = $row->translated_text;
 			$source_map[ $row->source_text ]                      = $row->translated_text;
+			if ( empty( $row->first_seen_post_id ) ) {
+				self::$string_unplaced[ $language ][ $row->source_text ] = true;
+			}
 		}
 
 		self::$string_cache_loaded[ $language ] = true;
 
 		return $source_map;
+	}
+
+	/**
+	 * Kända strängar för språket som ännu inte har någon sida registrerad.
+	 *
+	 * @param string $language Målspråk.
+	 * @return array source_text => true.
+	 */
+	public function get_unplaced_strings( $language ) {
+		$this->load_all_strings( $language );
+		return self::$string_unplaced[ $language ] ?? array();
+	}
+
+	/**
+	 * Registrera sidan för strängar som saknar en. Strängar som samlades in
+	 * före 1.1.0 har ingen sida, och utan sida får de ingen sidkontext när
+	 * de översätts om. Rör aldrig rader som redan har en sida.
+	 *
+	 * @param array  $texts    Källtexter som setts på sidan.
+	 * @param string $language Målspråk.
+	 * @param int    $post_id  Sidan.
+	 * @return int Antal uppdaterade rader.
+	 */
+	public function backfill_first_seen( array $texts, $language, $post_id ) {
+		global $wpdb;
+
+		$post_id = (int) $post_id;
+		if ( $post_id <= 0 || empty( $texts ) ) {
+			return 0;
+		}
+
+		$hashes = array();
+		foreach ( $texts as $text ) {
+			$hashes[] = $this->hash_text( $text );
+		}
+		$hashes = array_values( array_unique( $hashes ) );
+
+		$count = 0;
+		foreach ( array_chunk( $hashes, 200 ) as $chunk ) {
+			$placeholders = implode( ',', array_fill( 0, count( $chunk ), '%s' ) );
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared, WordPress.DB.PreparedSQLPlaceholders.UnfinishedPrepare
+			$count += (int) $wpdb->query( $wpdb->prepare(
+				"UPDATE {$this->table_strings} SET first_seen_post_id = %d
+				 WHERE language = %s AND (first_seen_post_id IS NULL OR first_seen_post_id = 0)
+				 AND source_hash IN ({$placeholders})",
+				array_merge( array( $post_id, $language ), $chunk )
+			) );
+		}
+
+		if ( $count > 0 && isset( self::$string_unplaced[ $language ] ) ) {
+			foreach ( $texts as $text ) {
+				unset( self::$string_unplaced[ $language ][ $text ] );
+			}
+		}
+
+		return $count;
 	}
 
 	/**

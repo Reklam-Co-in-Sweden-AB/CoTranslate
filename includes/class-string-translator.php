@@ -37,6 +37,13 @@ class CoTranslate_String_Translator {
 	private $known = array();
 
 	/**
+	 * Kända strängar utan registrerad sida, och de av dem som setts på den
+	 * här sidvisningen. Sidan registreras i efterhand i queue_untranslated().
+	 */
+	private $unplaced      = array();
+	private $seen_unplaced = array();
+
+	/**
 	 * Strängar som saknar översättning (för köning).
 	 */
 	private $untranslated = array();
@@ -89,8 +96,9 @@ class CoTranslate_String_Translator {
 
 		// Förladda alla strängar för aktuellt språk (en enda DB-query)
 		$language   = cotranslate_get_current_language();
-		$all        = $this->store->load_all_strings( $language );
-		$this->known = $all;
+		$all            = $this->store->load_all_strings( $language );
+		$this->known    = $all;
+		$this->unplaced = $this->store->get_unplaced_strings( $language );
 
 		// Bara färdiga översättningar får användas för ersättning.
 		$this->dictionary = array_filter( $all, function ( $translated ) {
@@ -525,8 +533,12 @@ class CoTranslate_String_Translator {
 				continue;
 			}
 
-			// Hoppa över om redan känd (översatt eller köad)
+			// Hoppa över om redan känd (översatt eller köad), men kom ihåg
+			// den om den saknar sida så att sidan kan registreras i efterhand.
 			if ( isset( $this->known[ $text ] ) ) {
+				if ( isset( $this->unplaced[ $text ] ) ) {
+					$this->seen_unplaced[ $text ] = true;
+				}
 				continue;
 			}
 
@@ -538,13 +550,21 @@ class CoTranslate_String_Translator {
 	 * Köa oöversatta strängar för bakgrundsöversättning.
 	 */
 	public function queue_untranslated() {
+		$language = cotranslate_get_current_language();
+		$post_id  = is_singular() ? (int) get_queried_object_id() : 0;
+
+		// Registrera sidan för kända strängar som saknade en. Utan sida får
+		// de ingen sidkontext när de översätts om.
+		if ( $post_id > 0 && ! empty( $this->seen_unplaced ) ) {
+			$this->store->backfill_first_seen( array_keys( $this->seen_unplaced ), $language, $post_id );
+			$this->seen_unplaced = array();
+		}
+
 		if ( empty( $this->untranslated ) ) {
 			return;
 		}
 
-		$language = cotranslate_get_current_language();
-		$texts    = array_keys( $this->untranslated );
-		$post_id  = is_singular() ? (int) get_queried_object_id() : 0;
+		$texts = array_keys( $this->untranslated );
 
 		// Spara med tom translated_text som markör för "behöver översättas",
 		// och kom ihåg vilken sida texten först sågs på (filtret "Hittad på").

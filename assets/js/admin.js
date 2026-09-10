@@ -812,7 +812,11 @@
 
 	// Översätt hela sajten: 1) sidor, 2) hämta texter från alla sidor, 3) kör kön
 	$siteBtn.on('click', function () {
-		if (!confirm('Går igenom hela sajten och översätter allt som inte redan är översatt eller handrättat. Det kan ta en stund och förbrukar tecken hos översättningsmotorn. Fortsätt?')) {
+		var retranslate = $('#cotranslate-retranslate-strings').is(':checked');
+		var msg = retranslate
+			? 'Går igenom hela sajten och översätter om alla sidor och texter som inte är handrättade. Det kan ta en stund och förbrukar tecken hos översättningsmotorn. Fortsätt?'
+			: 'Går igenom hela sajten och översätter allt som inte redan är översatt eller handrättat. Det kan ta en stund och förbrukar tecken hos översättningsmotorn. Fortsätt?';
+		if (!confirm(msg)) {
 			return;
 		}
 		lock(true);
@@ -860,8 +864,24 @@
 				var d = response.data;
 				if (d.done) {
 					$bar.css('width', '67%');
-					$text.text('Steg 3 av 3: kör kön...');
-					window.cotranslateRunQueue($text, $bar, function () { reloadSoon(); });
+					if ($('#cotranslate-retranslate-strings').is(':checked')) {
+						// Köa om färdiga texter först nu, när skanningen registrerat
+						// vilken sida varje text hör till (ger sidkontext).
+						$text.text('Steg 3 av 3: köar om färdiga texter...');
+						$.post(cotranslateAdmin.ajaxUrl, {
+							action: 'cotranslate_requeue_all_strings',
+							nonce: cotranslateAdmin.nonce
+						}, function () {
+							$text.text('Steg 3 av 3: kör kön...');
+							window.cotranslateRunQueue($text, $bar, function () { reloadSoon(); });
+						}).fail(function () {
+							$text.html('<span class="cotranslate-error">Nätverksfel. Försök igen.</span>');
+							lock(false);
+						});
+					} else {
+						$text.text('Steg 3 av 3: kör kön...');
+						window.cotranslateRunQueue($text, $bar, function () { reloadSoon(); });
+					}
 				} else {
 					$bar.css('width', Math.round(33 + (d.percent || 0) / 3) + '%');
 					$text.text('Steg 2 av 3: hämtar texter... ' + (d.message || ''));

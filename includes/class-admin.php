@@ -60,6 +60,7 @@ class CoTranslate_Admin {
 		add_action( 'wp_ajax_cotranslate_scan_all', array( $this, 'ajax_scan_all' ) );
 		add_action( 'wp_ajax_cotranslate_process_queue_now', array( $this, 'ajax_process_queue_now' ) );
 		add_action( 'wp_ajax_cotranslate_glossary_release', array( $this, 'ajax_glossary_release' ) );
+		add_action( 'wp_ajax_cotranslate_requeue_all_strings', array( $this, 'ajax_requeue_all_strings' ) );
 	}
 
 	/**
@@ -455,6 +456,24 @@ class CoTranslate_Admin {
 	}
 
 	/**
+	 * AJAX: Köa om alla färdiga texter (handrättade rörs inte). Används av
+	 * "Översätt hela sajten" när kryssrutan "Översätt om även färdiga texter"
+	 * är ibockad, efter skanningen så att texterna har sin sida registrerad.
+	 */
+	public function ajax_requeue_all_strings() {
+		check_ajax_referer( 'cotranslate_admin', 'nonce' );
+
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( 'Otillräckliga behörigheter.' );
+		}
+
+		$requeue = new CoTranslate_Glossary_Requeue( $this->store );
+		$count   = $requeue->requeue_all_strings();
+
+		wp_send_json_success( array( 'strings' => $count ) );
+	}
+
+	/**
 	 * AJAX: Släpp en manuell rättning och köa för omöversättning.
 	 */
 	public function ajax_glossary_release() {
@@ -665,6 +684,7 @@ class CoTranslate_Admin {
 					<?php if ( $is_admin ) : ?>
 						<button type="button" class="button" id="cotranslate-translate-site" <?php disabled( ! $has_key || ! $has_target ); ?>>Översätt hela sajten</button>
 						<span class="description">Går igenom alla sidor och texter. Handrättat innehåll hoppas över.</span>
+						<label class="cotranslate-retranslate-label"><input type="checkbox" id="cotranslate-retranslate-strings" /> Översätt om även färdiga texter, t.ex. efter ny ordlista eller kontext. Handrättade rörs inte.</label>
 					<?php endif; ?>
 				</div>
 				<div id="cotranslate-queue-progress" style="display:none;">
@@ -2353,6 +2373,9 @@ class CoTranslate_Admin {
 		// Vilken sida var det? (för filtret "Hittad på" under Texter)
 		$seen_post_id = (int) url_to_postid( preg_replace( '#/' . preg_quote( $language, '#' ) . '(/|$)#', '$1', $url, 1 ) );
 
+		// Registrera sidan för redan kända strängar som saknar en.
+		$this->store->backfill_first_seen( $strings, $language, $seen_post_id );
+
 		// Filtrera bort strängar som redan finns i databasen
 		$new_count = 0;
 		foreach ( $strings as $text ) {
@@ -2536,6 +2559,9 @@ class CoTranslate_Admin {
 		if ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ) {
 			$html    = wp_remote_retrieve_body( $response );
 			$strings = $this->extract_visible_text( $html );
+
+			// Registrera sidan för redan kända strängar som saknar en.
+			$this->store->backfill_first_seen( $strings, $current_lang, $post->ID );
 
 			foreach ( $strings as $text ) {
 				$existing = $this->store->get_string_translation( $text, $current_lang );

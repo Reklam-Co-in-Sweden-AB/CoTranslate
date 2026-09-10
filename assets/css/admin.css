@@ -376,3 +376,10 @@ a.cotranslate-tab-link {
 .cotranslate-inline-tool #cotranslate-scan-status {
 	margin-left: 8px;
 }
+
+/* Kryssruta under Översätt hela sajten */
+.cotranslate-retranslate-label {
+	display: block;
+	margin-top: 8px;
+	color: #50575e;
+}

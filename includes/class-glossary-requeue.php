@@ -190,6 +190,32 @@ class CoTranslate_Glossary_Requeue {
 	}
 
 	/**
+	 * Köa om alla färdiga texter (inte handrättade) för alla målspråk, t.ex.
+	 * efter att sidkontext eller ordlista tillkommit och allt ska göras om.
+	 *
+	 * @return int Antal strängar som köades om.
+	 */
+	public function requeue_all_strings() {
+		global $wpdb;
+		$t_strings = $wpdb->prefix . 'cotranslate_strings';
+		$default   = cotranslate_get_default_language();
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$count = (int) $wpdb->query( $wpdb->prepare(
+			"UPDATE {$t_strings} SET translated_text = ''
+			 WHERE is_manual = 0 AND translated_text <> '' AND language <> %s",
+			$default
+		) );
+
+		if ( $count > 0 ) {
+			$this->store->clear_string_cache();
+		}
+		$this->schedule_background();
+
+		return $count;
+	}
+
+	/**
 	 * Se till att bakgrundsjobben är schemalagda om ingen kör förgrundsloopen.
 	 */
 	public function schedule_background() {
