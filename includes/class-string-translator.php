@@ -592,6 +592,7 @@ class CoTranslate_String_Translator {
 
 		$enabled_languages = cotranslate_get_enabled_languages();
 		$default_language  = cotranslate_get_default_language();
+		$saved             = 0;
 
 		foreach ( $enabled_languages as $language ) {
 			if ( $language === $default_language ) {
@@ -676,8 +677,14 @@ class CoTranslate_String_Translator {
 						$translated_text,
 						'general'
 					);
+					$saved++;
 				}
 			}
+		}
+
+		// Sidcachen visar annars gamla texter tills någon rensar den för hand.
+		if ( $saved > 0 ) {
+			cotranslate_purge_page_cache();
 		}
 	}
 }

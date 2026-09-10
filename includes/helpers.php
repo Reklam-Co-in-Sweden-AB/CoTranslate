@@ -305,3 +305,51 @@ function cotranslate_is_rtl_language( $lang_code ) {
 function cotranslate_get_supported_post_types() {
 	return get_option( 'cotranslate_supported_post_types', array( 'post', 'page', 'product' ) );
 }
+
+/**
+ * Rensa sidcache så att nya översättningar syns direkt.
+ *
+ * Stöder LiteSpeed Cache (både det gamla klass-API:t och kroken
+ * litespeed_purge_all som gäller från version 3), WP Super Cache, W3 Total
+ * Cache, WP Rocket, WP Fastest Cache och Autoptimize. Anropas när kön
+ * tömts i förgrunden, efter bakgrundsjobb som sparat översättningar, och
+ * när en handrättning sparas.
+ */
+function cotranslate_purge_page_cache() {
+	// LiteSpeed Cache: kroken är rätt sätt sedan version 3 och är ofarlig
+	// att köra även om pluginen saknas.
+	do_action( 'litespeed_purge_all' );
+	if ( class_exists( 'LiteSpeed_Cache_API' ) ) {
+		LiteSpeed_Cache_API::purge_all();
+	} elseif ( function_exists( 'litespeed_purge_all' ) ) {
+		litespeed_purge_all();
+	}
+
+	// WP Super Cache
+	if ( function_exists( 'wp_cache_clear_cache' ) ) {
+		wp_cache_clear_cache();
+	}
+
+	// W3 Total Cache
+	if ( function_exists( 'w3tc_flush_all' ) ) {
+		w3tc_flush_all();
+	}
+
+	// WP Rocket
+	if ( function_exists( 'rocket_clean_domain' ) ) {
+		rocket_clean_domain();
+	}
+
+	// WP Fastest Cache
+	if ( function_exists( 'wpfc_clear_all_cache' ) ) {
+		wpfc_clear_all_cache();
+	}
+
+	// Autoptimize
+	if ( class_exists( 'autoptimizeCache' ) ) {
+		autoptimizeCache::clearall();
+	}
+
+	// WordPress object cache
+	wp_cache_flush();
+}

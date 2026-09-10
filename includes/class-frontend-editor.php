@@ -277,40 +277,7 @@ class CoTranslate_Frontend_Editor {
 	 * WP Rocket, WP Fastest Cache och Autoptimize.
 	 */
 	public function purge_cache() {
-		// LiteSpeed Cache
-		if ( class_exists( 'LiteSpeed_Cache_API' ) ) {
-			LiteSpeed_Cache_API::purge_all();
-		} elseif ( function_exists( 'litespeed_purge_all' ) ) {
-			litespeed_purge_all();
-		}
-
-		// WP Super Cache
-		if ( function_exists( 'wp_cache_clear_cache' ) ) {
-			wp_cache_clear_cache();
-		}
-
-		// W3 Total Cache
-		if ( function_exists( 'w3tc_flush_all' ) ) {
-			w3tc_flush_all();
-		}
-
-		// WP Rocket
-		if ( function_exists( 'rocket_clean_domain' ) ) {
-			rocket_clean_domain();
-		}
-
-		// WP Fastest Cache
-		if ( function_exists( 'wpfc_clear_all_cache' ) ) {
-			wpfc_clear_all_cache();
-		}
-
-		// Autoptimize
-		if ( class_exists( 'autoptimizeCache' ) ) {
-			autoptimizeCache::clearall();
-		}
-
-		// WordPress object cache
-		wp_cache_flush();
+		cotranslate_purge_page_cache();
 	}
 
 	/**

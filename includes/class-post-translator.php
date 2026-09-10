@@ -244,9 +244,17 @@ class CoTranslate_Post_Translator {
 		}
 
 		$pending = $this->store->get_pending_translations( 5 );
+		$saved   = 0;
 
 		foreach ( $pending as $row ) {
-			$this->translate_post( (int) $row->post_id, $row->language );
+			if ( $this->translate_post( (int) $row->post_id, $row->language ) ) {
+				$saved++;
+			}
+		}
+
+		// Sidcachen visar annars gamla texter tills någon rensar den för hand.
+		if ( $saved > 0 ) {
+			cotranslate_purge_page_cache();
 		}
 	}
 
