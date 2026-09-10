@@ -136,14 +136,17 @@ class CoTranslate_String_Translator {
 		$html = $this->rewrite_remaining_urls( $html );
 
 		if ( ! empty( $this->dictionary ) ) {
+			// Översätt <title>-taggen först, medan den fortfarande innehåller
+			// originalet och kan träffa ordboken exakt. Körs den efter
+			// textnoderna ser den den redan översatta titeln, missar ordboken
+			// och köar översatta ord som nya källtexter.
+			$html = $this->translate_title_tag( $html );
+
 			// Översätt textnoder utanför script/style/textarea
 			$html = $this->translate_text_nodes( $html );
 
 			// Översätt HTML-attribut (alt, title, placeholder, aria-label)
 			$html = $this->translate_attributes( $html );
-
-			// Översätt <title>-taggen
-			$html = $this->translate_title_tag( $html );
 		}
 
 		return $html;
@@ -323,14 +326,19 @@ class CoTranslate_String_Translator {
 		return preg_replace_callback(
 			'#<title>([^<]+)</title>#i',
 			function ( $matches ) {
-				$original = trim( $matches[1] );
+				// Avkoda entiteter (WordPress skriver "&#8211;" för tankstreck)
+				// så att nyckeln matchar ordboken, som lagrar avkodad text.
+				$original = trim( html_entity_decode( $matches[1], ENT_QUOTES, 'UTF-8' ) );
 
 				if ( isset( $this->dictionary[ $original ] ) ) {
 					return '<title>' . esc_html( $this->dictionary[ $original ] ) . '</title>';
 				}
 
-				// Försök delvis matchning (t.ex. "Sidtitel — Sajtnamn")
-				$parts      = preg_split( '/\s*[\-–—|]\s*/', $original );
+				// Försök delvis matchning (t.ex. "Sidtitel — Sajtnamn").
+				// /u är nödvändigt: utan det delas strängen mitt i tankstreckets
+				// bytes, esc_html() får ogiltig UTF-8 och returnerar tom sträng,
+				// vilket gav <title></title> på alla översatta undersidor.
+				$parts      = preg_split( '/\s*[\-–—|]\s*/u', $original );
 				$translated = array();
 				$changed    = false;
 
@@ -346,7 +354,7 @@ class CoTranslate_String_Translator {
 
 				if ( $changed ) {
 					// Återskapa med samma separator
-					preg_match( '/\s*([\-–—|])\s*/', $original, $sep_match );
+					preg_match( '/\s*([\-–—|])\s*/u', $original, $sep_match );
 					$separator = isset( $sep_match[0] ) ? $sep_match[0] : ' — ';
 					return '<title>' . esc_html( implode( $separator, $translated ) ) . '</title>';
 				}

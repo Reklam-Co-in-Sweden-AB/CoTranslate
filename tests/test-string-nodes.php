@@ -94,5 +94,36 @@ foreach ( $collected as $string ) {
 }
 check( 'kommentarstext köas inte för översättning', $has_comment_junk, false );
 
+// <title>-taggen: tankstreck är flerbyte, och utan /u tömdes titeln på alla
+// översatta undersidor (esc_html() kastar ogiltig UTF-8).
+$title_m = $ref->getMethod( 'translate_title_tag' );
+if ( PHP_VERSION_ID < 80100 ) { $title_m->setAccessible( true ); }
+$dict->setValue( $obj, array(
+	'Trimguide – First Seafood' => 'Afslankgids – First Seafood',
+	'First Seafood'             => 'First Seafood',
+	'Kontakt'                   => 'Contact',
+) );
+$untr = $ref->getProperty( 'untranslated' );
+if ( PHP_VERSION_ID < 80100 ) { $untr->setAccessible( true ); }
+$untr->setValue( $obj, array() );
+
+check( 'title: entitet avkodas och hela titeln träffar ordboken',
+	$title_m->invoke( $obj, '<title>Trimguide &#8211; First Seafood</title>' ),
+	'<title>Afslankgids – First Seafood</title>' );
+
+check( 'title: delvis matchning med tankstreck ger inte tom titel',
+	$title_m->invoke( $obj, '<title>Kontakt – First Seafood</title>' ),
+	'<title>Contact – First Seafood</title>' );
+
+check( 'title: redan översatt titel lämnas orörd',
+	$title_m->invoke( $obj, '<title>Afslankgids – First Seafood</title>' ),
+	'<title>Afslankgids – First Seafood</title>' );
+
+$untr->setValue( $obj, array() );
+check( 'title: helt okänd titel lämnas orörd och köas',
+	$title_m->invoke( $obj, '<title>Karriere – Jobb</title>' ),
+	'<title>Karriere – Jobb</title>' );
+check( 'title: okända delar och hela titeln köas som källtext', array_keys( $untr->getValue( $obj ) ), array( 'Karriere', 'Jobb', 'Karriere – Jobb' ) );
+
 echo $fails ? "\n$fails test misslyckades\n" : "\nAlla test gröna\n";
 exit( $fails ? 1 : 0 );
