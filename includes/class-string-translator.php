@@ -137,11 +137,21 @@ class CoTranslate_String_Translator {
 			return $html;
 		}
 
-		// Samla alltid oöversatta strängar (även om vi har en dictionary)
+		// Block som redan står på sidans språk (lang="nb" på /nb/) eller som
+		// uttryckligen inte ska översättas (translate="no") lyfts ur medan
+		// strängar samlas in och ersätts. Länkarna i dem ska däremot få sitt
+		// språkprefix, så de sätts tillbaka inför URL-omskrivningen.
+		$language = cotranslate_get_current_language();
+		$held     = array();
+
+		$html = $this->hold_untranslatable_blocks( $html, $language, $held );
 		$this->collect_untranslated_strings( $html );
+		$html = $this->release_blocks( $html, $held );
 
 		// URL-rewriting för eventuella missade länkar
 		$html = $this->rewrite_remaining_urls( $html );
+
+		$html = $this->hold_untranslatable_blocks( $html, $language, $held );
 
 		if ( ! empty( $this->dictionary ) ) {
 			// Översätt <title>-taggen först, medan den fortfarande innehåller
@@ -156,6 +166,125 @@ class CoTranslate_String_Translator {
 			// Översätt HTML-attribut (alt, title, placeholder, aria-label)
 			$html = $this->translate_attributes( $html );
 		}
+
+		return $this->release_blocks( $html, $held );
+	}
+
+	/**
+	 * Lyft ur element som inte ska översättas och lämna en platshållare.
+	 *
+	 * Två standardattribut styr:
+	 *
+	 *  - translate="no" — elementet översätts aldrig, på något språk.
+	 *  - lang="xx" — elementet står redan på språk xx och lämnas när sidan
+	 *    visas på just det språket. På övriga språk översätts det som vanligt.
+	 *
+	 * Det andra fallet är skälet till att funktionen finns. En sajt med
+	 * engelska som huvudspråk kan ha innehåll som bara finns på norska
+	 * (platsannonser ur ett rekryteringssystem). Utan märkningen skickas den
+	 * norska texten till motorn som "engelska → norska", och motorn skriver
+	 * om den: «Sales & Logistics Coordinator» blev «salgs- og
+	 * logistikkkoordinator» och meningar formulerades om.
+	 *
+	 * <html> och <body> hoppas över — de bär sidans eget språk, och hela
+	 * sidan skulle annars lyftas ur.
+	 *
+	 * @param string $html     HTML.
+	 * @param string $language Språket sidan visas på.
+	 * @param array  $held     Fylls på: platshållare => ursprunglig HTML.
+	 * @return string HTML med platshållare.
+	 */
+	private function hold_untranslatable_blocks( $html, $language, array &$held ) {
+		if ( false === stripos( $html, 'translate=' ) && false === stripos( $html, ' lang=' ) ) {
+			return $html;
+		}
+
+		$pattern = '#<([a-z][a-z0-9]*)\b(?=[^>]*\s(?:translate\s*=\s*["\']no["\']|lang\s*=\s*["\']([a-zA-Z-]+)["\']))[^>]*>#i';
+		$offset  = 0;
+		$out     = '';
+
+		while ( preg_match( $pattern, $html, $m, PREG_OFFSET_CAPTURE, $offset ) ) {
+			$tag      = strtolower( $m[1][0] );
+			$start    = $m[0][1];
+			$open_end = $start + strlen( $m[0][0] );
+			$skip     = in_array( $tag, array( 'html', 'body', 'head' ), true );
+
+			// Med bara lang="…" gäller det bara när språket är sidans eget.
+			if ( ! $skip && ! preg_match( '#\stranslate\s*=\s*["\']no["\']#i', $m[0][0] ) ) {
+				$block_lang = strtolower( substr( (string) ( $m[2][0] ?? '' ), 0, 2 ) );
+				$skip       = $block_lang !== strtolower( substr( (string) $language, 0, 2 ) );
+			}
+
+			$end = $skip ? false : $this->find_element_end( $html, $tag, $open_end );
+
+			if ( false === $end ) {
+				// Inget att lyfta ur (eller ett element utan sluttagg): gå vidare.
+				$out   .= substr( $html, $offset, $open_end - $offset );
+				$offset = $open_end;
+				continue;
+			}
+
+			$key          = '<!--COTRANSLATE_HELD_' . count( $held ) . '-->';
+			$held[ $key ] = substr( $html, $start, $end - $start );
+
+			$out   .= substr( $html, $offset, $start - $offset ) . $key;
+			$offset = $end;
+		}
+
+		return $out . substr( $html, $offset );
+	}
+
+	/**
+	 * Hitta var ett element slutar, med hänsyn till nästlade element av
+	 * samma slag.
+	 *
+	 * @param string $html  HTML.
+	 * @param string $tag   Elementets namn i gemener.
+	 * @param int    $from  Positionen direkt efter öppningstaggen.
+	 * @return int|false Positionen direkt efter sluttaggen, eller false.
+	 */
+	private function find_element_end( $html, $tag, $from ) {
+		$void = array( 'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr' );
+
+		if ( in_array( $tag, $void, true ) ) {
+			return false;
+		}
+
+		$depth  = 1;
+		$offset = $from;
+		$regex  = '#<(/?)' . preg_quote( $tag, '#' ) . '\b[^>]*>#i';
+
+		while ( preg_match( $regex, $html, $m, PREG_OFFSET_CAPTURE, $offset ) ) {
+			$offset = $m[0][1] + strlen( $m[0][0] );
+
+			if ( '/' === $m[1][0] ) {
+				if ( 0 === --$depth ) {
+					return $offset;
+				}
+			} elseif ( '/>' !== substr( $m[0][0], -2 ) ) {
+				++$depth;
+			}
+		}
+
+		return false;
+	}
+
+	/**
+	 * Sätt tillbaka urlyfta block.
+	 *
+	 * Töms efteråt, så att samma lista kan användas för nästa urlyftning.
+	 */
+	private function release_blocks( $html, array &$held ) {
+		if ( empty( $held ) ) {
+			return $html;
+		}
+
+		// Baklänges: ett yttre block kan innehålla platshållare för ett inre.
+		foreach ( array_reverse( $held, true ) as $key => $original ) {
+			$html = str_replace( $key, $original, $html );
+		}
+
+		$held = array();
 
 		return $html;
 	}
