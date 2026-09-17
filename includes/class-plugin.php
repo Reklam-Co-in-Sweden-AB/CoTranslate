@@ -99,6 +99,7 @@ class CoTranslate_Plugin {
 		require_once $dir . 'class-glossary-requeue.php';
 		require_once $dir . 'class-translation-store.php';
 		require_once $dir . 'class-post-translator.php';
+		require_once $dir . 'class-slug-map.php';
 		require_once $dir . 'class-url-handler.php';
 		require_once $dir . 'class-language-switcher.php';
 		require_once $dir . 'class-string-translator.php';

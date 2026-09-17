@@ -928,6 +928,32 @@ class CoTranslate_Admin {
 									<?php checked( $translate_slugs ); ?> />
 								Översätt post-sluggar till målspråket
 							</label>
+							<p class="description">
+								Adresserna blir t.ex. <code>/nb/produkter/</code> i stället för <code>/nb/products/</code>.
+								Den gamla adressen omdirigeras (301) till den översatta.
+							</p>
+							<fieldset id="cotranslate-slug-languages" style="margin-top:8px;">
+								<legend class="screen-reader-text">Språk med översatta sluggar</legend>
+								<?php
+								$slug_selected = get_option( 'cotranslate_slug_languages', null );
+								foreach ( $enabled_languages as $slug_lang ) :
+									if ( $slug_lang === $default_language ) {
+										continue;
+									}
+									$slug_label = $supported[ $slug_lang ]['native'] ?? $slug_lang;
+									$slug_on    = ! is_array( $slug_selected ) || in_array( $slug_lang, $slug_selected, true );
+									?>
+									<label style="display:inline-block;margin-right:14px;">
+										<input type="checkbox" class="cotranslate-slug-language"
+											value="<?php echo esc_attr( $slug_lang ); ?>" <?php checked( $slug_on ); ?> />
+										<?php echo esc_html( $slug_label ); ?>
+									</label>
+								<?php endforeach; ?>
+							</fieldset>
+							<p class="description">
+								Avmarkera språk där en översatt slug blir procentkodad och oläslig,
+								t.ex. kinesiska — då behålls originalsluggen: <code>/zh/products/</code>.
+							</p>
 						</td>
 					</tr>
 				</table>
@@ -1678,6 +1704,13 @@ class CoTranslate_Admin {
 
 		// Booleans
 		update_option( 'cotranslate_translate_slugs', ! empty( $_POST['translate_slugs'] ) );
+
+		// Språk med översatta sluggar. Skickas alltid med från formuläret, så
+		// en tom lista betyder "inga språk" och inte "aldrig sparat".
+		$slug_languages = isset( $_POST['slug_languages'] ) && is_array( $_POST['slug_languages'] )
+			? array_values( array_filter( array_map( 'sanitize_key', wp_unslash( $_POST['slug_languages'] ) ) ) )
+			: array();
+		update_option( 'cotranslate_slug_languages', $slug_languages );
 		update_option( 'cotranslate_enable_frontend_editor', ! empty( $_POST['frontend_editor'] ) );
 		update_option( 'cotranslate_show_floating_switcher', ! empty( $_POST['floating_switcher'] ) );
 		update_option( 'cotranslate_auto_detect_language', ! empty( $_POST['auto_detect'] ) );

@@ -353,3 +353,100 @@ function cotranslate_purge_page_cache() {
 	// WordPress object cache
 	wp_cache_flush();
 }
+
+/**
+ * Språk där översatta URL-sluggar används.
+ *
+ * Huvudreglaget är `cotranslate_translate_slugs`. Är det på gäller alla
+ * aktiverade språk utom standardspråket, om inte urvalet snävats in med
+ * `cotranslate_slug_languages`. Urvalet finns för språk där en översatt slug
+ * blir procentkodad och oläslig — kinesiska är det typiska exemplet, där
+ * /zh/%e4%ba%a7%e5%93%81/ är sämre att klistra in i ett mail än /zh/products/.
+ *
+ * @return string[] Språkkoder.
+ */
+function cotranslate_get_slug_languages() {
+	if ( ! get_option( 'cotranslate_translate_slugs', false ) ) {
+		return array();
+	}
+
+	$default    = cotranslate_get_default_language();
+	$candidates = array_values( array_diff( (array) cotranslate_get_enabled_languages(), array( $default ) ) );
+	$selected   = get_option( 'cotranslate_slug_languages', null );
+
+	// Aldrig sparat: alla språk, som reglaget alltid har lovat.
+	if ( ! is_array( $selected ) ) {
+		return $candidates;
+	}
+
+	return array_values( array_intersect( $candidates, $selected ) );
+}
+
+/**
+ * Slugkartan för den här sidvisningen.
+ *
+ * @return CoTranslate_Slug_Map
+ */
+function cotranslate_slug_map() {
+	static $map = null;
+
+	if ( null !== $map ) {
+		return $map;
+	}
+
+	if ( ! class_exists( 'CoTranslate_Slug_Map' ) ) {
+		require_once COTRANSLATE_PLUGIN_DIR . 'includes/class-slug-map.php';
+	}
+
+	$map = new CoTranslate_Slug_Map(
+		static function ( $language ) {
+			global $wpdb;
+
+			$table = $wpdb->prefix . 'cotranslate_translations';
+
+			// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+			$rows = $wpdb->get_results( $wpdb->prepare(
+				"SELECT p.post_name AS original, t.translated_slug AS translated
+				 FROM {$table} t
+				 INNER JOIN {$wpdb->posts} p ON p.ID = t.post_id
+				 WHERE t.language = %s AND t.translated_slug <> '' AND p.post_status = 'publish'
+				 ORDER BY ( p.post_type = 'page' ) DESC, p.ID ASC",
+				$language
+			), ARRAY_A );
+
+			return is_array( $rows ) ? $rows : array();
+		},
+		static function () {
+			global $wpdb;
+
+			$slugs = $wpdb->get_col( "SELECT DISTINCT post_name FROM {$wpdb->posts} WHERE post_status = 'publish' AND post_name <> ''" );
+
+			return is_array( $slugs ) ? $slugs : array();
+		},
+		cotranslate_get_slug_languages()
+	);
+
+	return $map;
+}
+
+/**
+ * Originalsökväg → sökväg med språkets översatta sluggar.
+ *
+ * @param string $path     Sökväg utan språkprefix.
+ * @param string $language Målspråk.
+ * @return string
+ */
+function cotranslate_translate_path( $path, $language ) {
+	return cotranslate_slug_map()->translate_path( $path, $language );
+}
+
+/**
+ * Sökväg med översatta sluggar → originalsökväg.
+ *
+ * @param string $path     Sökväg utan språkprefix.
+ * @param string $language Språket sökvägen är skriven på.
+ * @return string
+ */
+function cotranslate_original_path( $path, $language ) {
+	return cotranslate_slug_map()->original_path( $path, $language );
+}

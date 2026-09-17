@@ -443,7 +443,7 @@ class CoTranslate_String_Translator {
 					return $matches[0];
 				}
 
-				return $matches[1] . $matches[2] . '/' . $current_lang . $matches[3] . $matches[4];
+				return $matches[1] . $matches[2] . '/' . $current_lang . $this->translate_link_path( $matches[3], $current_lang ) . $matches[4];
 			},
 			$html
 		);
@@ -460,7 +460,7 @@ class CoTranslate_String_Translator {
 					return $matches[0];
 				}
 
-				return $matches[1] . '/' . $current_lang . '/' . $matches[2] . $matches[3];
+				return $matches[1] . '/' . $current_lang . $this->translate_link_path( '/' . $matches[2], $current_lang ) . $matches[3];
 			},
 			$html
 		);
@@ -471,6 +471,28 @@ class CoTranslate_String_Translator {
 		}
 
 		return $html;
+	}
+
+	/**
+	 * Byt originalsluggarna i en länks sökväg mot språkets översatta.
+	 *
+	 * Länkar som står inskrivna i innehållet (knappar, kort, löptext) passerar
+	 * aldrig WordPress länkfilter, så de får sina sluggar här. Query och
+	 * fragment lämnas orörda.
+	 *
+	 * @param string $path     Sökväg med inledande snedstreck, ev. följd av ?… eller #…
+	 * @param string $language Aktuellt språk.
+	 * @return string
+	 */
+	private function translate_link_path( $path, $language ) {
+		if ( '' === $path || ! function_exists( 'cotranslate_translate_path' ) ) {
+			return $path;
+		}
+
+		$cut  = strcspn( $path, '?#' );
+		$tail = substr( $path, $cut );
+
+		return cotranslate_translate_path( substr( $path, 0, $cut ), $language ) . $tail;
 	}
 
 	/**

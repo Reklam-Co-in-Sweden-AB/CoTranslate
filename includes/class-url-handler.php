@@ -24,6 +24,13 @@ class CoTranslate_URL_Handler {
 	private $original_request_uri;
 
 	/**
+	 * Sökvägen som besökaren bad om, utan språkprefix och FÖRE uppslaget av
+	 * översatta sluggar. Används för att omdirigera /nb/products/ till
+	 * /nb/produkter/.
+	 */
+	private $requested_path;
+
+	/**
 	 * Förhindra oändlig rekursion i URL-filter.
 	 */
 	private $is_filtering_url = false;
@@ -105,12 +112,18 @@ class CoTranslate_URL_Handler {
 		// Skyddar mot t.ex. home_url med avslutande slash som ger 'site.com//en/...'.
 		$url = preg_replace( '#([^:])//+#', '$1/', $url );
 
-		// Ta bort eventuellt befintligt språkprefix
-		$clean_url = $this->strip_language_prefix( $url );
+		// Ta bort eventuellt befintligt språkprefix. URL:en kan bära det
+		// NUVARANDE språkets översatta sluggar (/nb/produkter/), så de slås
+		// tillbaka till originalet innan målspråkets sluggar sätts.
+		$from_language = $this->detect_url_language( $url );
+		$clean_url     = $this->strip_language_prefix( $url );
+		$clean_url     = $this->map_url_path( $clean_url, $from_language, 'original' );
 
 		if ( $language === $default_language ) {
 			return $clean_url;
 		}
+
+		$clean_url = $this->map_url_path( $clean_url, $language, 'translate' );
 
 		// Extrahera path efter domänen
 		$parsed = wp_parse_url( $clean_url );
@@ -190,6 +203,11 @@ class CoTranslate_URL_Handler {
 					$new_path = '/' . $new_path;
 				}
 
+				// Översatta sluggar (/nb/produkter/) slås upp till originalet
+				// (/products/) — WordPress känner bara originalsluggarna.
+				$this->requested_path = $new_path;
+				$new_path             = cotranslate_original_path( $new_path, $lang );
+
 				// Bevara query string
 				$query = wp_parse_url( $request_uri, PHP_URL_QUERY );
 				$_SERVER['REQUEST_URI'] = $new_path . ( $query ? '?' . $query : '' );
@@ -262,12 +280,68 @@ class CoTranslate_URL_Handler {
 			}
 		}
 
-		// Lägg till prefix efter domänen
+		// Byt originalsluggarna mot språkets översatta, och lägg sedan till
+		// prefixet efter domänen.
+		$url = $this->map_url_path( $url, $current_lang, 'translate' );
+
 		return preg_replace(
 			'#^(' . preg_quote( $home_url, '#' ) . ')(/|$)#',
 			'$1/' . $current_lang . '$2',
 			$url
 		);
+	}
+
+	/**
+	 * Översätt sluggarna i en sajt-URL:s sökväg, åt valfritt håll.
+	 *
+	 * URL:en får inte ha något språkprefix. Query och fragment rörs inte.
+	 *
+	 * @param string $url       Absolut URL på den här sajten.
+	 * @param string $language  Språket sluggarna gäller.
+	 * @param string $direction 'translate' (original → översatt) eller 'original'.
+	 * @return string
+	 */
+	private function map_url_path( $url, $language, $direction ) {
+		$home_url = rtrim( $this->get_raw_home_url(), '/' );
+
+		if ( strpos( $url, $home_url ) !== 0 ) {
+			return $url;
+		}
+
+		$rest = substr( $url, strlen( $home_url ) );
+
+		// Dela av query och fragment — bara sökvägen har sluggar.
+		$tail = '';
+		$cut  = strcspn( $rest, '?#' );
+
+		if ( $cut < strlen( $rest ) ) {
+			$tail = substr( $rest, $cut );
+			$rest = substr( $rest, 0, $cut );
+		}
+
+		$rest = 'original' === $direction
+			? cotranslate_original_path( $rest, $language )
+			: cotranslate_translate_path( $rest, $language );
+
+		return $home_url . $rest . $tail;
+	}
+
+	/**
+	 * Vilket språkprefix en sajt-URL bär, eller standardspråket om inget.
+	 *
+	 * @param string $url Absolut URL.
+	 * @return string Språkkod.
+	 */
+	private function detect_url_language( $url ) {
+		$home_url = rtrim( $this->get_raw_home_url(), '/' );
+
+		foreach ( $this->get_enabled_languages() as $lang ) {
+			if ( preg_match( '#^' . preg_quote( $home_url, '#' ) . '/' . preg_quote( $lang, '#' ) . '(/|$|\?|\#)#', $url ) ) {
+				return $lang;
+			}
+		}
+
+		return $this->get_default_language();
 	}
 
 	// =========================================================================
@@ -357,6 +431,9 @@ class CoTranslate_URL_Handler {
 	 * Hantera språkredirect.
 	 */
 	public function handle_language_redirect() {
+		// /nb/products/ → /nb/produkter/ när språket har översatta sluggar
+		$this->maybe_redirect_to_translated_slug();
+
 		// Domänmappning (om aktiverad)
 		$domain_map = get_option( 'cotranslate_domain_language_map', array() );
 		if ( ! empty( $domain_map ) ) {
@@ -370,6 +447,45 @@ class CoTranslate_URL_Handler {
 
 		// Sätt cookie för aktuellt språk
 		$this->set_language_cookie( $this->get_current_language() );
+	}
+
+	/**
+	 * Omdirigera till adressen med översatta sluggar.
+	 *
+	 * Båda adresserna svarar annars — /nb/products/ och /nb/produkter/ — och
+	 * sökmotorer ser det som dubbelt innehåll. Den översatta är den riktiga.
+	 * Förhandsvisningar, formulärinskick och 404 lämnas.
+	 */
+	private function maybe_redirect_to_translated_slug() {
+		$language = $this->get_current_language();
+
+		if ( null === $this->requested_path || $language === $this->get_default_language() ) {
+			return;
+		}
+
+		if ( 'GET' !== ( $_SERVER['REQUEST_METHOD'] ?? 'GET' ) || is_404() || is_preview() || is_feed() ) {
+			return;
+		}
+
+		if ( ! cotranslate_slug_map()->is_enabled_for( $language ) ) {
+			return;
+		}
+
+		$canonical = cotranslate_translate_path( cotranslate_original_path( $this->requested_path, $language ), $language );
+
+		if ( $canonical === $this->requested_path ) {
+			return;
+		}
+
+		$target = rtrim( $this->get_raw_home_url(), '/' ) . '/' . $language . $canonical;
+		$query  = wp_parse_url( $this->get_original_request_uri(), PHP_URL_QUERY );
+
+		if ( $query ) {
+			$target .= '?' . $query;
+		}
+
+		wp_safe_redirect( $target, 301, 'CoTranslate' );
+		exit;
 	}
 
 	/**

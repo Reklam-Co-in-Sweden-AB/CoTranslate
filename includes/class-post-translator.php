@@ -198,7 +198,9 @@ class CoTranslate_Post_Translator {
 
 		// Översätt slug om aktiverat
 		$translated_slug = '';
-		if ( get_option( 'cotranslate_translate_slugs', false ) && ! empty( $post->post_name ) ) {
+		// Bara för språk där sluggarna faktiskt används — annars går API-tecken
+		// åt till en slug som aldrig syns (t.ex. kinesiska med engelska adresser).
+		if ( in_array( $language, cotranslate_get_slug_languages(), true ) && ! empty( $post->post_name ) ) {
 			$result = $this->api->translate_slug(
 				$post->post_name,
 				$default_language,

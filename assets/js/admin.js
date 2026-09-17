@@ -134,6 +134,11 @@
 			}
 		});
 
+		var slugLanguages = [];
+		$('.cotranslate-slug-language:checked').each(function () {
+			slugLanguages.push($(this).val());
+		});
+
 		$.post(cotranslateAdmin.ajaxUrl, {
 			action: 'cotranslate_save_settings',
 			nonce: cotranslateAdmin.nonce,
@@ -144,6 +149,7 @@
 			enabled_languages: enabledLanguages,
 			post_types: postTypes,
 			translate_slugs: $('#cotranslate-translate-slugs').is(':checked') ? 1 : 0,
+			slug_languages: slugLanguages,
 			frontend_editor: $('#cotranslate-frontend-editor').is(':checked') ? 1 : 0,
 			floating_switcher: $('#cotranslate-floating-switcher').is(':checked') ? 1 : 0,
 			floating_position: $('#cotranslate-floating-position').val(),
