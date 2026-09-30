@@ -245,6 +245,9 @@ check(
 );
 check( 'hreflang: naken frågesträng ger startsidan', $alla_href( $head( '/?x=1', 'add_hreflang_tags' ) )[0], "$H/" );
 check( 'canonical: frågesträngen följer inte med', $alla_href( $head( '/nb/produkter/?fbclid=abc', 'fix_canonical' ) ), array( "$H/nb/produkter/" ) );
+check( 'canonical: ingen egen tagg på standardspråket', $head( '/products/', 'fix_canonical' ), '' );
+define( 'WPSEO_VERSION', 'test' );
+check( 'canonical: ingen egen tagg när Yoast skriver ut den', $head( '/nb/produkter/', 'fix_canonical' ), '' );
 
 echo "\n" . ( $fails ? "$fails FEL\n" : "Alla tester passerade.\n" );
 exit( $fails ? 1 : 0 );

@@ -68,9 +68,15 @@ class CoTranslate_SEO {
 	 * Fixera canonical URL för språkversioner.
 	 *
 	 * Tar bort WordPress default canonical och lägger till korrekt version.
+	 * Med Yoast eller Rank Math skriver SEO-pluginet redan ut canonical, och
+	 * den språkanpassas i filter_yoast_canonical() — en egen tagg här blev
+	 * en andra canonical på varje icke-standardspråk.
 	 */
 	public function fix_canonical() {
 		if ( is_admin() || cotranslate_is_default_language() ) {
+			return;
+		}
+		if ( defined( 'WPSEO_VERSION' ) || class_exists( 'RankMath' ) ) {
 			return;
 		}
 
