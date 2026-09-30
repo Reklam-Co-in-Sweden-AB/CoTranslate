@@ -195,5 +195,56 @@ check( 'buffert: bildfil lämnas', $rewrite( "<a href=\"$H/wp-content/uploads/pr
 besok( '/zh/' );
 check( 'buffert: kinesiska får prefix men engelsk slug', $rewrite( "<a href=\"$H/products/\">x</a>" ), "<a href=\"$H/zh/products/\">x</a>" );
 
+// --- <head>: hreflang och canonical utan besökets frågesträng ---
+if ( ! function_exists( 'esc_url' ) ) {
+	function esc_url( $url ) {
+		return $url;
+	}
+}
+if ( ! function_exists( 'esc_attr' ) ) {
+	function esc_attr( $text ) {
+		return $text;
+	}
+}
+if ( ! function_exists( 'cotranslate_is_default_language' ) ) {
+	function cotranslate_is_default_language() {
+		return cotranslate_get_current_language() === cotranslate_get_default_language();
+	}
+}
+if ( ! function_exists( 'remove_action' ) ) {
+	function remove_action() {
+		return true;
+	}
+}
+require __DIR__ . '/../includes/class-seo.php';
+$head = function ( $uri, $metod ) {
+	$handler = besok( $uri );
+	$seo     = ( new ReflectionClass( 'CoTranslate_SEO' ) )->newInstanceWithoutConstructor();
+	$prop    = new ReflectionProperty( $seo, 'url_handler' );
+	if ( PHP_VERSION_ID < 80100 ) {
+		$prop->setAccessible( true );
+	}
+	$prop->setValue( $seo, $handler );
+	ob_start();
+	$seo->$metod();
+	return ob_get_clean();
+};
+$alla_href = function ( $html ) {
+	preg_match_all( '/href="([^"]*)"/', $html, $m );
+	return $m[1];
+};
+check(
+	'hreflang: frågesträngen följer inte med (startsidan)',
+	$alla_href( $head( '/?nocache=1&utm_source=x', 'add_hreflang_tags' ) ),
+	array( "$H/", "$H/nb/", "$H/nl/", "$H/zh/", "$H/" )
+);
+check(
+	'hreflang: frågesträngen följer inte med (norsk undersida)',
+	$alla_href( $head( '/nb/produkter/?fbclid=abc', 'add_hreflang_tags' ) ),
+	array( "$H/products/", "$H/nb/produkter/", "$H/nl/producten/", "$H/zh/products/", "$H/products/" )
+);
+check( 'hreflang: naken frågesträng ger startsidan', $alla_href( $head( '/?x=1', 'add_hreflang_tags' ) )[0], "$H/" );
+check( 'canonical: frågesträngen följer inte med', $alla_href( $head( '/nb/produkter/?fbclid=abc', 'fix_canonical' ) ), array( "$H/nb/produkter/" ) );
+
 echo "\n" . ( $fails ? "$fails FEL\n" : "Alla tester passerade.\n" );
 exit( $fails ? 1 : 0 );

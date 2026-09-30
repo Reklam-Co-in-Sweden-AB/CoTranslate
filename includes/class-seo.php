@@ -426,12 +426,17 @@ class CoTranslate_SEO {
 	}
 
 	/**
-	 * Hämta aktuell sidas URL.
+	 * Hämta aktuell sidas URL utan frågesträng.
+	 *
+	 * hreflang och canonical ska peka på sidan, inte på besöket: med
+	 * frågesträngen kvar blev ?utm_source=…, ?fbclid=… och ?nocache=1
+	 * alternativa URL:er i <head>.
 	 *
 	 * @return string Aktuell URL.
 	 */
 	private function get_current_page_url() {
 		$request_uri = $this->url_handler->get_original_request_uri();
-		return get_option( 'home' ) . $request_uri;
+		$path        = explode( '?', $request_uri, 2 )[0];
+		return get_option( 'home' ) . ( '' !== $path ? $path : '/' );
 	}
 }
