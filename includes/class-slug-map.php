@@ -10,6 +10,12 @@
  * posttyper med fast bas (/careers/positions/<annons>/) fungerar utan
  * specialfall: varje segment som är en känd slug byts, övriga står kvar.
  *
+ * Översatta sluggar kan krocka med termernas sluggar: sidan netherlands
+ * heter nederland på norska, och det gör även avdelningen /avdeling/nederland/.
+ * Ett sådant segment slås bara tillbaka där en sida kan stå, först i sökvägen
+ * eller direkt under en annan sida. Under en taxonomibas (avdeling/) är det
+ * termens egen slug och lämnas.
+ *
  * Klassen rör inte databasen själv. Tabellen laddas av en anropbar funktion
  * som skickas in, så att logiken går att testa utan WordPress.
  */
@@ -37,6 +43,13 @@ class CoTranslate_Slug_Map {
 	private $originals_loader;
 
 	/**
+	 * Funktion som ger alla termsluggar. Behövs för termkrocken.
+	 *
+	 * @var callable|null
+	 */
+	private $terms_loader;
+
+	/**
 	 * Språk vars sluggar ska användas.
 	 *
 	 * @var string[]
@@ -44,7 +57,8 @@ class CoTranslate_Slug_Map {
 	private $languages;
 
 	/**
-	 * Färdiga uppslag per språk: array( 'fram' => …, 'bak' => … ).
+	 * Färdiga uppslag per språk: array( 'fram' => …, 'bak' => …,
+	 * 'sidor' => postsluggar, 'termkrock' => översatta sluggar som också är termsluggar ).
 	 *
 	 * @var array<string, array<string, array<string, string>>>
 	 */
@@ -54,11 +68,13 @@ class CoTranslate_Slug_Map {
 	 * @param callable $loader           Ger raderna för ett språk.
 	 * @param callable $originals_loader Ger alla publicerade originalsluggar.
 	 * @param string[] $languages        Språk där översatta sluggar är påslagna.
+	 * @param callable $terms_loader     Ger alla termsluggar (valfri).
 	 */
-	public function __construct( callable $loader, callable $originals_loader, array $languages ) {
+	public function __construct( callable $loader, callable $originals_loader, array $languages, ?callable $terms_loader = null ) {
 		$this->loader           = $loader;
 		$this->originals_loader = $originals_loader;
 		$this->languages        = array_values( $languages );
+		$this->terms_loader     = $terms_loader;
 	}
 
 	/**
@@ -116,6 +132,7 @@ class CoTranslate_Slug_Map {
 		}
 
 		$segments = explode( '/', $path );
+		$previous = null; // Föregående segment, som originalslug.
 
 		foreach ( $segments as $i => $segment ) {
 			if ( '' === $segment ) {
@@ -124,12 +141,29 @@ class CoTranslate_Slug_Map {
 
 			$key = self::normalize( $segment );
 
-			if ( isset( $map[ $direction ][ $key ] ) ) {
+			if ( isset( $map[ $direction ][ $key ] ) && ! $this->is_term_segment( $map, $direction, $key, $previous ) ) {
 				$segments[ $i ] = $map[ $direction ][ $key ];
 			}
+
+			$previous = self::normalize( $segments[ $i ] );
 		}
 
 		return implode( '/', $segments );
+	}
+
+	/**
+	 * Om ett segment på vägen tillbaka är en termslug och inte en sida.
+	 *
+	 * Gäller bara sluggar som både är en sidas översättning och en term.
+	 * En sida står först eller under en annan sida; allt annat (taxonomibas,
+	 * posttypsbas) betyder att segmentet är termens egen slug.
+	 */
+	private function is_term_segment( $map, $direction, $key, $previous ) {
+		if ( 'bak' !== $direction || ! isset( $map['termkrock'][ $key ] ) ) {
+			return false;
+		}
+
+		return null !== $previous && ! isset( $map['sidor'][ $previous ] );
 	}
 
 	/**
@@ -194,9 +228,23 @@ class CoTranslate_Slug_Map {
 			$backward[ $translated ] = $raw['original'];
 		}
 
+		$term_clashes = array();
+
+		if ( null !== $this->terms_loader ) {
+			foreach ( (array) call_user_func( $this->terms_loader ) as $slug ) {
+				$slug = self::normalize( $slug );
+
+				if ( isset( $backward[ $slug ] ) ) {
+					$term_clashes[ $slug ] = true;
+				}
+			}
+		}
+
 		$this->maps[ $language ] = array(
-			'fram' => $forward,
-			'bak'  => $backward,
+			'fram'      => $forward,
+			'bak'       => $backward,
+			'sidor'     => $originals,
+			'termkrock' => $term_clashes,
 		);
 
 		return $this->maps[ $language ];

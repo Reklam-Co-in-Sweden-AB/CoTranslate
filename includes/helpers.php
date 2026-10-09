@@ -423,7 +423,14 @@ function cotranslate_slug_map() {
 
 			return is_array( $slugs ) ? $slugs : array();
 		},
-		cotranslate_get_slug_languages()
+		cotranslate_get_slug_languages(),
+		static function () {
+			global $wpdb;
+
+			$slugs = $wpdb->get_col( "SELECT DISTINCT slug FROM {$wpdb->terms}" );
+
+			return is_array( $slugs ) ? $slugs : array();
+		}
 	);
 
 	return $map;

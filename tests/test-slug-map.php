@@ -106,5 +106,33 @@ $karta->flush();
 $karta->translate_path( '/products/', 'nb' );
 check( 'flush tvingar ny laddning', $anrop, $fore + 1 );
 
+// --- Termkrock: sidan netherlands heter nederland på nb/nl, och det gör
+// även avdelningen /avdeling/nederland/ (firstseafood, 9 okt) ---
+$termkarta = new CoTranslate_Slug_Map(
+	function ( $sprak ) {
+		return array(
+			array( 'original' => 'netherlands', 'translated' => 'nederland' ),
+			array( 'original' => 'about-us', 'translated' => 'om-oss' ),
+			array( 'original' => 'careers', 'translated' => 'karriere' ),
+		);
+	},
+	function () {
+		return array( 'netherlands', 'about-us', 'careers', 'bergen' );
+	},
+	array( 'nb', 'nl' ),
+	function () {
+		return array( 'bergen', 'oslo', 'nederland' );
+	}
+);
+check( 'termkrock: sidan överst slås tillbaka', $termkarta->original_path( '/nederland/', 'nb' ), '/netherlands/' );
+check( 'termkrock: sidan utan avslutande snedstreck', $termkarta->original_path( '/nederland', 'nb' ), '/netherlands' );
+check( 'termkrock: sidan under en annan sida slås tillbaka', $termkarta->original_path( '/om-oss/nederland/', 'nb' ), '/about-us/netherlands/' );
+check( 'termkrock: termen under taxonomibasen lämnas', $termkarta->original_path( '/avdeling/nederland/', 'nb' ), '/avdeling/nederland/' );
+check( 'termkrock: samma på nederländska', $termkarta->original_path( '/avdeling/nederland/', 'nl' ), '/avdeling/nederland/' );
+check( 'termkrock: framåt orört för termen', $termkarta->translate_path( '/avdeling/nederland/', 'nb' ), '/avdeling/nederland/' );
+check( 'termkrock: framåt för sidan', $termkarta->translate_path( '/netherlands/', 'nb' ), '/nederland/' );
+check( 'termkrock: slug utan termkrock slås tillbaka även under bas', $termkarta->original_path( '/x/karriere/', 'nb' ), '/x/careers/' );
+check( 'utan termladdare: som förut', $karta->original_path( '/avdeling/produkter/', 'nb' ), '/avdeling/products/' );
+
 echo "\n" . ( $fails ? "$fails FEL\n" : "Alla tester passerade.\n" );
 exit( $fails ? 1 : 0 );
