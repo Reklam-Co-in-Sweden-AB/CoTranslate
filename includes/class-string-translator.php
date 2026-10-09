@@ -390,6 +390,24 @@ class CoTranslate_String_Translator {
 		// Attribut som innehåller översättningsbar text
 		$attributes = array( 'alt', 'title', 'placeholder', 'aria-label', 'aria-placeholder', 'content', 'data-label' );
 
+		// <meta> med tekniska värden skyddas först, så att content översätts
+		// bara i texterna. Före 3.5.5 blev og:type «nettsted» och «网站».
+		$protected_meta = array();
+		$html           = preg_replace_callback(
+			'/<meta\b[^>]*>/i',
+			function ( $matches ) use ( &$protected_meta ) {
+				if ( self::is_translatable_meta( $matches[0] ) ) {
+					return $matches[0];
+				}
+
+				$key                    = '<!--cotranslate-meta-' . count( $protected_meta ) . '-->';
+				$protected_meta[ $key ] = $matches[0];
+
+				return $key;
+			},
+			$html
+		);
+
 		foreach ( $attributes as $attr ) {
 			$html = preg_replace_callback(
 				'/' . preg_quote( $attr, '/' ) . '="([^"]+)"/i',
@@ -410,6 +428,10 @@ class CoTranslate_String_Translator {
 				},
 				$html
 			);
+		}
+
+		if ( ! empty( $protected_meta ) ) {
+			$html = str_replace( array_keys( $protected_meta ), array_values( $protected_meta ), $html );
 		}
 
 		// Översätt value-attribut på submit-knappar och buttons
@@ -451,6 +473,26 @@ class CoTranslate_String_Translator {
 		);
 
 		return $html;
+	}
+
+	/**
+	 * Om en <meta>-tagg bär text som ska översättas.
+	 *
+	 * Bara beskrivningar och titlar. og:type, og:locale, og:url, twitter:card,
+	 * viewport, robots m.fl. är tekniska värden och ska stå orörda.
+	 *
+	 * @param string $tag Hela <meta>-taggen.
+	 * @return bool
+	 */
+	private static function is_translatable_meta( $tag ) {
+		if ( ! preg_match( '/\b(?:name|property)="([^"]+)"/i', $tag, $m ) ) {
+			return false;
+		}
+
+		$name = strtolower( $m[1] );
+
+		return in_array( $name, array( 'description', 'og:title', 'og:description', 'og:image:alt', 'twitter:title', 'twitter:description', 'twitter:image:alt' ), true )
+			|| (bool) preg_match( '/^twitter:(?:label|data)\d$/', $name );
 	}
 
 	/**

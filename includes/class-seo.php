@@ -52,6 +52,7 @@ class CoTranslate_SEO {
 		add_filter( 'wpseo_opengraph_url', array( $this, 'filter_og_url' ), 10, 1 );
 		add_filter( 'wpseo_opengraph_title', array( $this, 'filter_og_title' ), 10, 1 );
 		add_filter( 'wpseo_opengraph_desc', array( $this, 'filter_og_description' ), 10, 1 );
+		add_filter( 'wpseo_og_locale', array( $this, 'filter_og_locale' ), 10, 1 );
 
 		// Meta description (generiskt, utan SEO-plugin)
 		add_action( 'wp_head', array( $this, 'maybe_add_meta_description' ), 5 );
@@ -126,6 +127,37 @@ class CoTranslate_SEO {
 		// Meta title och description
 		add_filter( 'wpseo_title', array( $this, 'filter_yoast_title' ), 10, 1 );
 		add_filter( 'wpseo_metadesc', array( $this, 'filter_yoast_metadesc' ), 10, 1 );
+
+		// Schema: inLanguage följer språkversionen
+		add_filter( 'wpseo_schema_graph', array( $this, 'filter_schema_language' ), 10, 1 );
+	}
+
+	/**
+	 * Sätt språkversionens språk i Yoasts schema.
+	 *
+	 * Yoast skriver sajtens språk (en-US) i varje del av grafen, även på
+	 * /nb/, /nl/ och /zh/.
+	 *
+	 * @param array $graph Yoasts schemagraf.
+	 * @return array Grafen med rätt inLanguage.
+	 */
+	public function filter_schema_language( $graph ) {
+		if ( ! is_array( $graph ) || cotranslate_is_default_language() ) {
+			return $graph;
+		}
+
+		$language = cotranslate_get_locale( cotranslate_get_current_language(), '-' );
+
+		array_walk_recursive(
+			$graph,
+			static function ( &$value, $key ) use ( $language ) {
+				if ( 'inLanguage' === $key ) {
+					$value = $language;
+				}
+			}
+		);
+
+		return $graph;
 	}
 
 	/**
@@ -268,6 +300,20 @@ class CoTranslate_SEO {
 
 		$language = cotranslate_get_current_language();
 		return $this->url_handler->get_url_for_language( $url, $language );
+	}
+
+	/**
+	 * Filtrera Open Graph locale.
+	 *
+	 * @param string $locale OG locale.
+	 * @return string Språkversionens locale, t.ex. nb_NO.
+	 */
+	public function filter_og_locale( $locale ) {
+		if ( cotranslate_is_default_language() ) {
+			return $locale;
+		}
+
+		return cotranslate_get_locale( cotranslate_get_current_language() );
 	}
 
 	/**

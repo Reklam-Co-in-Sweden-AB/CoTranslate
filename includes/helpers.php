@@ -245,6 +245,39 @@ function cotranslate_deepl_to_wp_lang( $deepl_code ) {
 }
 
 /**
+ * Språkkod med land, för og:locale och schemats inLanguage.
+ *
+ * Open Graph kräver formen «nb_NO»; schema.org använder «nb-NO». Där landet
+ * inte har samma kod som språket står det i tabellen, annars upprepas koden.
+ *
+ * @param string $code      Språkkod (t.ex. 'nb').
+ * @param string $separator '_' för Open Graph, '-' för schema.org.
+ * @return string T.ex. 'nb_NO' eller 'nb-NO'.
+ */
+function cotranslate_get_locale( $code, $separator = '_' ) {
+	$countries = array(
+		'ar' => 'SA',
+		'cs' => 'CZ',
+		'da' => 'DK',
+		'el' => 'GR',
+		'en' => 'US',
+		'et' => 'EE',
+		'ja' => 'JP',
+		'ko' => 'KR',
+		'nb' => 'NO',
+		'pt' => 'PT',
+		'sl' => 'SI',
+		'sv' => 'SE',
+		'uk' => 'UA',
+		'zh' => 'CN',
+	);
+
+	$code = strtolower( $code );
+
+	return $code . $separator . ( $countries[ $code ] ?? strtoupper( $code ) );
+}
+
+/**
  * Hämta aktuellt språk.
  *
  * @return string Språkkod (t.ex. 'sv', 'en').
