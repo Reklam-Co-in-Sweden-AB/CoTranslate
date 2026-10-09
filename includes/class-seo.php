@@ -120,9 +120,8 @@ class CoTranslate_SEO {
 		// Canonical
 		add_filter( 'wpseo_canonical', array( $this, 'filter_yoast_canonical' ), 10, 1 );
 
-		// Sitemap: lägg till språkvarianter
-		add_filter( 'wpseo_sitemap_entry', array( $this, 'add_sitemap_languages' ), 10, 3 );
-		add_filter( 'wpseo_sitemap_url', array( $this, 'add_sitemap_hreflang' ), 10, 2 );
+		// Sitemap: språkversionerna som egna poster
+		add_filter( 'wpseo_sitemap_url', array( $this, 'add_sitemap_language_urls' ), 10, 2 );
 
 		// Meta title och description
 		add_filter( 'wpseo_title', array( $this, 'filter_yoast_title' ), 10, 1 );
@@ -199,87 +198,44 @@ class CoTranslate_SEO {
 	}
 
 	/**
-	 * Lägg till språkvarianter i Yoast sitemap-entry.
+	 * Lägg till språkversionerna som egna poster i Yoasts sitemap.
 	 *
-	 * @param array  $url  Sitemap URL-data.
-	 * @param string $type Post type.
-	 * @param object $post Post-objekt.
-	 * @return array Uppdaterad URL-data.
-	 */
-	public function add_sitemap_languages( $url, $type, $post ) {
-		if ( ! is_array( $url ) || ! isset( $url['loc'] ) ) {
-			return $url;
-		}
-
-		$enabled_languages = cotranslate_get_enabled_languages();
-		$default_language  = cotranslate_get_default_language();
-
-		// Kontrollera att posten har översättningar
-		$post_id = 0;
-		if ( is_object( $post ) && isset( $post->ID ) ) {
-			$post_id = $post->ID;
-		}
-
-		if ( empty( $post_id ) ) {
-			return $url;
-		}
-
-		// Lägg till xhtml:link för varje språk
-		$images = $url['images'] ?? array();
-
-		foreach ( $enabled_languages as $lang ) {
-			$lang_url = $this->url_handler->get_url_for_language( $url['loc'], $lang );
-
-			// Yoast stöder inte xhtml:link direkt i entries,
-			// men vi kan filtrera sitemap XML nedan
-		}
-
-		return $url;
-	}
-
-	/**
-	 * Lägg till hreflang-attribut i sitemap-URL.
+	 * Yoast känner bara till standardspråkets adresser, så varje <url>-post
+	 * skrivs ut en gång till per språk med språkets adress (och översatta
+	 * sluggar) i <loc>. hreflang skrivs bara i <head>. Före 3.5.3 lade
+	 * sitemapen in xhtml:link utan namnrymd (ogiltig XML), och filtret
+	 * läste URL-arrayen som ett post-objekt, så alla alternativ blev tomma
+	 * eller pekade på språkets startsida.
 	 *
-	 * @param string $output Sitemap URL XML.
-	 * @param object $post   Post-objekt.
-	 * @return string Uppdaterad XML med xhtml:link.
+	 * @param string $output Yoasts XML för en <url>-post.
+	 * @param array  $url    Yoasts URL-data (loc, mod, images).
+	 * @return string XML med språkversionernas poster efter originalet.
 	 */
-	public function add_sitemap_hreflang( $output, $post ) {
-		$enabled_languages = cotranslate_get_enabled_languages();
-		$default_language  = cotranslate_get_default_language();
-
-		if ( count( $enabled_languages ) < 2 ) {
+	public function add_sitemap_language_urls( $output, $url ) {
+		if ( ! is_array( $url ) || empty( $url['loc'] ) ) {
 			return $output;
 		}
 
-		$post_id = 0;
-		if ( is_object( $post ) && isset( $post->ID ) ) {
-			$post_id = $post->ID;
-		}
+		$default_language = cotranslate_get_default_language();
+		$language_entries = '';
 
-		$permalink = get_permalink( $post_id );
-		$hreflang_xml = '';
+		foreach ( cotranslate_get_enabled_languages() as $lang ) {
+			if ( $lang === $default_language ) {
+				continue;
+			}
 
-		foreach ( $enabled_languages as $lang ) {
-			$lang_url = $this->url_handler->get_url_for_language( $permalink, $lang );
-			$hreflang_xml .= sprintf(
-				"\t\t<xhtml:link rel=\"alternate\" hreflang=\"%s\" href=\"%s\" />\n",
-				esc_attr( $lang ),
-				esc_url( $lang_url )
+			$lang_loc          = '<loc>' . esc_url( $this->url_handler->get_url_for_language( $url['loc'], $lang ) ) . '</loc>';
+			$language_entries .= preg_replace_callback(
+				'#<loc>[^<]*</loc>#',
+				function () use ( $lang_loc ) {
+					return $lang_loc;
+				},
+				$output,
+				1
 			);
 		}
 
-		// x-default
-		$default_url = $this->url_handler->get_url_for_language( $permalink, $default_language );
-		$hreflang_xml .= sprintf(
-			"\t\t<xhtml:link rel=\"alternate\" hreflang=\"x-default\" href=\"%s\" />\n",
-			esc_url( $default_url )
-		);
-
-		// Injicera före </url>
-		$output = str_replace( '</url>', $hreflang_xml . "\t</url>", $output );
-
-		return $output;
+		return $output . $language_entries;
 	}
 
 	// =========================================================================
