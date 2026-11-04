@@ -447,6 +447,18 @@ function cotranslate_slug_map() {
 				$language
 			), ARRAY_A );
 
+			$rows = is_array( $rows ) ? $rows : array();
+
+			/**
+			 * Egna slugpar utöver posternas, t.ex. en posttyps rewrite-bas
+			 * (/produkt/ → /product/). Varje rad: array( 'original' => …, 'translated' => … ).
+			 * Samma krockregler gäller som för posternas sluggar.
+			 *
+			 * @param array  $rows     Slugpar från översättningstabellen.
+			 * @param string $language Språket kartan gäller.
+			 */
+			$rows = apply_filters( 'cotranslate_slug_map_rows', $rows, $language );
+
 			return is_array( $rows ) ? $rows : array();
 		},
 		static function () {
