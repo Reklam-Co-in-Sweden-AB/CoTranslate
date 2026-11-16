@@ -2400,11 +2400,11 @@ class CoTranslate_Admin {
 			wp_send_json_error( 'Kunde inte avgöra målspråk från URL:en.' );
 		}
 
-		// Extrahera synlig text
-		$strings = $this->extract_visible_text( $html );
-
 		// Vilken sida var det? (för filtret "Hittad på" under Texter)
 		$seen_post_id = (int) url_to_postid( preg_replace( '#/' . preg_quote( $language, '#' ) . '(/|$)#', '$1', $url, 1 ) );
+
+		// Extrahera synlig text
+		$strings = $this->drop_translated_output( $this->extract_visible_text( $html ), $language, $seen_post_id );
 
 		// Registrera sidan för redan kända strängar som saknar en.
 		$this->store->backfill_first_seen( $strings, $language, $seen_post_id );
@@ -2591,7 +2591,7 @@ class CoTranslate_Admin {
 
 		if ( ! is_wp_error( $response ) && 200 === wp_remote_retrieve_response_code( $response ) ) {
 			$html    = wp_remote_retrieve_body( $response );
-			$strings = $this->extract_visible_text( $html );
+			$strings = $this->drop_translated_output( $this->extract_visible_text( $html ), $current_lang, $post->ID );
 
 			// Registrera sidan för redan kända strängar som saknar en.
 			$this->store->backfill_first_seen( $strings, $current_lang, $post->ID );
@@ -2624,6 +2624,27 @@ class CoTranslate_Admin {
 				$new_strings
 			),
 		) );
+	}
+
+	/**
+	 * Sålla bort text som är pluginets egen översättning.
+	 *
+	 * Skannern hämtar sidan på målspråket, och allt som redan är översatt
+	 * står då på målspråket i svaret. Utan sållningen sparas den texten som
+	 * ny källtext och skickas till motorn en gång till — på en färdigöversatt
+	 * sajt var hälften av de översatta tecknen redan engelska.
+	 *
+	 * @param string[] $strings  Text ur den hämtade sidan.
+	 * @param string   $language Målspråk.
+	 * @param int      $post_id  Sidan som skannades, 0 om okänd.
+	 * @return string[] Texterna som inte är översättningar.
+	 */
+	private function drop_translated_output( array $strings, $language, $post_id ) {
+		$outputs = $this->store->get_translated_outputs( $language, (int) $post_id );
+
+		return array_values( array_filter( $strings, function ( $text ) use ( $outputs ) {
+			return ! isset( $outputs[ $text ] );
+		} ) );
 	}
 
 	/**

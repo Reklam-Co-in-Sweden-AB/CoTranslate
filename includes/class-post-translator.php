@@ -202,7 +202,10 @@ class CoTranslate_Post_Translator {
 		// åt till en slug som aldrig syns (t.ex. kinesiska med engelska adresser).
 		if ( in_array( $language, cotranslate_get_slug_languages(), true ) && ! empty( $post->post_name ) ) {
 			$result = $this->api->translate_slug(
-				$post->post_name,
+				self::restore_slug_diacritics(
+					$post->post_name,
+					$post->post_title . ' ' . $post->post_excerpt . ' ' . $post->post_content
+				),
 				$default_language,
 				$language
 			);
@@ -223,6 +226,47 @@ class CoTranslate_Post_Translator {
 		);
 
 		return $this->store->save_post_translation( $post_id, $language, $data, $chars_used );
+	}
+
+	/**
+	 * Sätt tillbaka diakriterna i en slug med hjälp av sidans egen text.
+	 *
+	 * WordPress stryker å, ä och ö när sluggen skapas, och utan dem är orden
+	 * andra ord: "mot-nils" översattes till "toward-nils" och "anga-kondensat"
+	 * till "handle-condensate". Varje ord i sluggen byts därför mot det första
+	 * ordet i referenstexten som ger samma slug — "mot" blir "Möt" när titeln
+	 * är "Möt Nils!". Ord utan motsvarighet lämnas som de är.
+	 *
+	 * @param string $slug      Sluggen, t.ex. "mot-nils".
+	 * @param string $reference Titel, utdrag och innehåll — titeln först.
+	 * @return string Sluggen med originalorden, t.ex. "Möt-Nils".
+	 */
+	public static function restore_slug_diacritics( $slug, $reference ) {
+		// Taggar byts mot mellanslag — annars växer "</h2><p>" ihop två ord.
+		$reference = preg_replace( '#<(script|style)[^>]*>.*?</\1>#si', ' ', (string) $reference );
+		$reference = html_entity_decode( preg_replace( '/<[^>]*>/', ' ', $reference ), ENT_QUOTES, 'UTF-8' );
+
+		if ( ! preg_match_all( '/[\p{L}\p{N}]+/u', $reference, $matches ) ) {
+			return $slug;
+		}
+
+		// Första förekomsten vinner, så titelns ord går före brödtextens.
+		$originals = array();
+		foreach ( $matches[0] as $word ) {
+			$key = mb_strtolower( remove_accents( $word ) );
+			if ( ! isset( $originals[ $key ] ) ) {
+				$originals[ $key ] = $word;
+			}
+		}
+
+		$words = explode( '-', $slug );
+		foreach ( $words as $i => $word ) {
+			if ( isset( $originals[ $word ] ) ) {
+				$words[ $i ] = $originals[ $word ];
+			}
+		}
+
+		return implode( '-', $words );
 	}
 
 	/**

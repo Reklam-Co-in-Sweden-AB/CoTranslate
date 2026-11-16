@@ -241,6 +241,7 @@ class CoTranslate_Plugin {
 		$translation = $this->store->get_post_translation( $post_id, $language );
 
 		if ( $translation && ! empty( $translation->translated_title ) ) {
+			CoTranslate_String_Translator::mark_translated( $translation->translated_title );
 			return $translation->translated_title;
 		}
 
@@ -275,6 +276,7 @@ class CoTranslate_Plugin {
 		$translation = $this->store->get_post_translation( $post_id, $language );
 
 		if ( $translation && ! empty( $translation->translated_content ) ) {
+			CoTranslate_String_Translator::mark_translated_html( $translation->translated_content );
 			return $translation->translated_content;
 		}
 
@@ -333,7 +335,14 @@ class CoTranslate_Plugin {
 		$translation = $this->store->get_post_translation( $post_id, $language );
 
 		if ( $translation && ! empty( $translation->translated_excerpt ) ) {
+			CoTranslate_String_Translator::mark_translated( $translation->translated_excerpt );
 			return $translation->translated_excerpt;
+		}
+
+		// Utan eget utdrag klipper WordPress ett ur innehållet — och är
+		// innehållet översatt är utdraget det också.
+		if ( $translation && ! empty( $translation->translated_content ) ) {
+			CoTranslate_String_Translator::mark_translated( wp_strip_all_tags( $excerpt ) );
 		}
 
 		return $excerpt;

@@ -53,6 +53,76 @@ class CoTranslate_String_Translator {
 	 */
 	private $buffer_active = false;
 
+	/**
+	 * Text som redan är översatt när den når bufferten: titel, utdrag och
+	 * innehåll som filtren i class-plugin.php har bytt ut. Sådan text får
+	 * aldrig köas som källtext — då skickas engelska till motorn som om den
+	 * vore svenska, kommer tillbaka omformulerad och ersätter den första
+	 * översättningen ("it felt right" blev "it felt right right away").
+	 *
+	 * @var array text => true
+	 */
+	private static $already_translated = array();
+
+	/**
+	 * Registrera en färdigöversatt text så att bufferten inte köar den.
+	 *
+	 * @param string $text Text utan HTML.
+	 */
+	public static function mark_translated( $text ) {
+		$text = self::normalize_text( $text );
+		if ( '' !== $text ) {
+			self::$already_translated[ $text ] = true;
+		}
+	}
+
+	/**
+	 * Registrera varje textnod i färdigöversatt HTML.
+	 *
+	 * @param string $html Översatt HTML, t.ex. ett inläggs innehåll.
+	 */
+	public static function mark_translated_html( $html ) {
+		foreach ( self::text_nodes( $html ) as $text ) {
+			self::$already_translated[ $text ] = true;
+		}
+	}
+
+	/**
+	 * Textnoderna i ett HTML-fragment, normaliserade på samma sätt som
+	 * insamlingen i collect_untranslated_strings().
+	 *
+	 * @param string $html HTML-fragment.
+	 * @return string[] Unika textnoder.
+	 */
+	public static function text_nodes( $html ) {
+		$clean = preg_replace( '#<(script|style|noscript|svg)[^>]*>.*?</\1>#si', '', (string) $html );
+		$clean = preg_replace( '#<!--.*?-->#s', '', $clean );
+
+		// Fragmentet saknar omgivande taggar, så första och sista noden
+		// får dem här.
+		preg_match_all( '#>([^<]+)<#', '>' . $clean . '<', $matches );
+
+		$nodes = array();
+		foreach ( $matches[1] as $raw ) {
+			$text = self::normalize_text( $raw );
+			if ( '' !== $text ) {
+				$nodes[ $text ] = true;
+			}
+		}
+
+		return array_keys( $nodes );
+	}
+
+	/**
+	 * Avkoda entiteter och trimma, som insamlingen gör.
+	 *
+	 * @param string $text Rå text.
+	 * @return string
+	 */
+	private static function normalize_text( $text ) {
+		return trim( html_entity_decode( (string) $text, ENT_QUOTES, 'UTF-8' ) );
+	}
+
 	public function __construct( CoTranslate_Translator $api, CoTranslate_Translation_Store $store ) {
 		$this->api   = $api;
 		$this->store = $store;
@@ -723,6 +793,11 @@ class CoTranslate_String_Translator {
 
 			// Måste innehålla minst en bokstav
 			if ( ! preg_match( '/\p{L}/u', $text ) ) {
+				continue;
+			}
+
+			// Redan översatt av titel-, utdrags- eller innehållsfiltret.
+			if ( isset( self::$already_translated[ $text ] ) ) {
 				continue;
 			}
 

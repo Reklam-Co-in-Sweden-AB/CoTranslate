@@ -539,6 +539,56 @@ class CoTranslate_Translation_Store {
 	}
 
 	/**
+	 * Allt pluginet självt skriver ut på ett språk: översatta strängar,
+	 * översatta titlar och utdrag, samt textnoderna i en sidas översatta
+	 * innehåll. Används av skannern för att känna igen sin egen utdata.
+	 *
+	 * En källtext som är identisk med sin översättning (ortnamn, "Service")
+	 * hamnar också här. Det är ofarligt: den är redan känd.
+	 *
+	 * @param string $language Målspråk.
+	 * @param int    $post_id  Sidan vars innehåll ska räknas med, 0 för ingen.
+	 * @return array text => true.
+	 */
+	public function get_translated_outputs( $language, $post_id = 0 ) {
+		global $wpdb;
+
+		$outputs = array();
+
+		foreach ( $this->load_all_strings( $language ) as $translated ) {
+			if ( '' !== (string) $translated ) {
+				$outputs[ $translated ] = true;
+			}
+		}
+
+		// phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+		$rows = $wpdb->get_results( $wpdb->prepare(
+			"SELECT translated_title, translated_excerpt FROM {$this->table_translations} WHERE language = %s",
+			$language
+		) );
+
+		foreach ( $rows as $row ) {
+			foreach ( array( $row->translated_title, $row->translated_excerpt ) as $text ) {
+				$text = trim( html_entity_decode( (string) $text, ENT_QUOTES, 'UTF-8' ) );
+				if ( '' !== $text ) {
+					$outputs[ $text ] = true;
+				}
+			}
+		}
+
+		if ( $post_id > 0 ) {
+			$translation = $this->get_post_translation( $post_id, $language );
+			if ( $translation && ! empty( $translation->translated_content ) ) {
+				foreach ( CoTranslate_String_Translator::text_nodes( $translation->translated_content ) as $text ) {
+					$outputs[ $text ] = true;
+				}
+			}
+		}
+
+		return $outputs;
+	}
+
+	/**
 	 * Kända strängar för språket som ännu inte har någon sida registrerad.
 	 *
 	 * @param string $language Målspråk.
