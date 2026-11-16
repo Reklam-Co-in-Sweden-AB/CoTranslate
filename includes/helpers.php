@@ -226,6 +226,40 @@ function cotranslate_wp_to_deepl_lang( $wp_code ) {
 }
 
 /**
+ * Vald engelsk variant.
+ *
+ * DeepL:s rena "EN" som målspråk är en äldre kod där motorn själv väljer —
+ * i praktiken amerikansk engelska (datum som "July 2, 2025"). Med varianten
+ * satt går det att få brittisk.
+ *
+ * @return string 'EN-GB', 'EN-US' eller tom sträng (motorn väljer).
+ */
+function cotranslate_get_english_variant() {
+	$variant = strtoupper( (string) get_option( 'cotranslate_english_variant', '' ) );
+
+	return in_array( $variant, array( 'EN-GB', 'EN-US' ), true ) ? $variant : '';
+}
+
+/**
+ * DeepL-kod för målspråket vid översättning.
+ *
+ * Skiljer sig från cotranslate_wp_to_deepl_lang() bara för engelska med vald
+ * variant. Ordlistor har ingen variant och ska fortsätta använda grundkoden.
+ *
+ * @param string $wp_code WordPress-språkkod (t.ex. 'en').
+ * @return string DeepL-kod (t.ex. 'EN-GB').
+ */
+function cotranslate_deepl_target_lang( $wp_code ) {
+	$code = cotranslate_wp_to_deepl_lang( $wp_code );
+
+	if ( 'EN' === $code && '' !== cotranslate_get_english_variant() ) {
+		return cotranslate_get_english_variant();
+	}
+
+	return $code;
+}
+
+/**
  * Konvertera DeepL-språkkod till WordPress-format.
  *
  * @param string $deepl_code DeepL-språkkod (t.ex. 'SV', 'NB').
@@ -273,6 +307,11 @@ function cotranslate_get_locale( $code, $separator = '_' ) {
 	);
 
 	$code = strtolower( $code );
+
+	// Brittisk engelska vald under Inställningar.
+	if ( 'en' === $code && 'EN-GB' === strtoupper( (string) get_option( 'cotranslate_english_variant', '' ) ) ) {
+		return $code . $separator . 'GB';
+	}
 
 	return $code . $separator . ( $countries[ $code ] ?? strtoupper( $code ) );
 }

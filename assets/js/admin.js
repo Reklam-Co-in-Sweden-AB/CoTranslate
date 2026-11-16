@@ -148,6 +148,7 @@
 			default_language: $('#cotranslate-default-language').val(),
 			enabled_languages: enabledLanguages,
 			post_types: postTypes,
+			english_variant: $('#cotranslate-english-variant').val(),
 			translate_slugs: $('#cotranslate-translate-slugs').is(':checked') ? 1 : 0,
 			slug_languages: slugLanguages,
 			frontend_editor: $('#cotranslate-frontend-editor').is(':checked') ? 1 : 0,

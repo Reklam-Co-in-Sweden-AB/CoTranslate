@@ -217,6 +217,11 @@ class CoTranslate_Claude_API implements CoTranslate_Translator {
 		$source_name = $languages[ $source_lang ]['name'] ?? $source_lang;
 		$target_name = $languages[ $target_lang ]['name'] ?? $target_lang;
 
+		// Vald engelsk variant, se cotranslate_get_english_variant().
+		if ( 'en' === $target_lang && '' !== cotranslate_get_english_variant() ) {
+			$target_name = 'EN-GB' === cotranslate_get_english_variant() ? 'British English' : 'American English';
+		}
+
 		// Hämta valfri stil-instruktion samt ordlista/kontext för målspråket
 		$custom_prompt  = get_option( 'cotranslate_claude_prompt', '' );
 		$glossary_block = CoTranslate_Glossary::build_prompt_block(

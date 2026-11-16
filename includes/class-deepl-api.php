@@ -231,7 +231,7 @@ class CoTranslate_DeepL_API implements CoTranslate_Translator {
 		$body = array(
 			'text'        => $texts,
 			'source_lang' => cotranslate_wp_to_deepl_lang( $source_lang ),
-			'target_lang' => cotranslate_wp_to_deepl_lang( $target_lang ),
+			'target_lang' => cotranslate_deepl_target_lang( $target_lang ),
 		);
 
 		if ( $html ) {

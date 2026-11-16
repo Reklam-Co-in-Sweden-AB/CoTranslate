@@ -19,6 +19,10 @@ function cotranslate_get_default_language() {
 function cotranslate_is_default_language() {
 	return 'en' === $GLOBALS['test_lang'];
 }
+$GLOBALS['test_options'] = array();
+function get_option( $name, $default = false ) {
+	return array_key_exists( $name, $GLOBALS['test_options'] ) ? $GLOBALS['test_options'][ $name ] : $default;
+}
 function esc_attr( $t ) {
 	return htmlspecialchars( (string) $t, ENT_QUOTES, 'UTF-8', false );
 }
@@ -88,6 +92,10 @@ check( 'locale nb', cotranslate_get_locale( 'nb' ), 'nb_NO' );
 check( 'locale nl', cotranslate_get_locale( 'nl' ), 'nl_NL' );
 check( 'locale zh', cotranslate_get_locale( 'zh' ), 'zh_CN' );
 check( 'locale sv med bindestreck', cotranslate_get_locale( 'sv', '-' ), 'sv-SE' );
+check( 'locale en utan vald variant', cotranslate_get_locale( 'en' ), 'en_US' );
+$GLOBALS['test_options']['cotranslate_english_variant'] = 'EN-GB';
+check( 'locale en med brittisk variant', cotranslate_get_locale( 'en' ), 'en_GB' );
+unset( $GLOBALS['test_options']['cotranslate_english_variant'] );
 
 $seo = ( new ReflectionClass( 'CoTranslate_SEO' ) )->newInstanceWithoutConstructor();
 check( 'og:locale på /nb/', $seo->filter_og_locale( 'en_US' ), 'nb_NO' );

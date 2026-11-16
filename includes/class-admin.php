@@ -776,6 +776,7 @@ class CoTranslate_Admin {
 		$supported          = cotranslate_get_supported_languages();
 		$post_types         = cotranslate_get_supported_post_types();
 		$translate_slugs    = get_option( 'cotranslate_translate_slugs', false );
+		$english_variant    = cotranslate_get_english_variant();
 		$frontend_editor    = get_option( 'cotranslate_enable_frontend_editor', false );
 		$floating_switcher  = get_option( 'cotranslate_show_floating_switcher', true );
 		$floating_position  = get_option( 'cotranslate_floating_position', 'bottom-right' );
@@ -905,6 +906,19 @@ class CoTranslate_Admin {
 
 				<h2>Innehåll</h2>
 				<table class="form-table">
+					<tr>
+						<th><label for="cotranslate-english-variant">Engelsk variant</label></th>
+						<td>
+							<select id="cotranslate-english-variant">
+								<option value="" <?php selected( $english_variant, '' ); ?>>Låt motorn välja</option>
+								<option value="EN-GB" <?php selected( $english_variant, 'EN-GB' ); ?>>Brittisk engelska</option>
+								<option value="EN-US" <?php selected( $english_variant, 'EN-US' ); ?>>Amerikansk engelska</option>
+							</select>
+							<p class="description">
+								Styr stavning och datumformat när engelska är målspråk. Gäller texter som översätts härefter.
+							</p>
+						</td>
+					</tr>
 					<tr>
 						<th>Post-typer att översätta</th>
 						<td>
@@ -1700,6 +1714,11 @@ class CoTranslate_Admin {
 		if ( isset( $_POST['post_types'] ) && is_array( $_POST['post_types'] ) ) {
 			$types = array_map( 'sanitize_key', $_POST['post_types'] );
 			update_option( 'cotranslate_supported_post_types', $types );
+		}
+
+		if ( isset( $_POST['english_variant'] ) ) {
+			$variant = strtoupper( sanitize_text_field( wp_unslash( $_POST['english_variant'] ) ) );
+			update_option( 'cotranslate_english_variant', in_array( $variant, array( 'EN-GB', 'EN-US' ), true ) ? $variant : '' );
 		}
 
 		// Booleans

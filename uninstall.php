@@ -32,6 +32,7 @@ $options = array(
 	'cotranslate_supported_post_types',
 	'cotranslate_translate_slugs',
 	'cotranslate_slug_languages',
+	'cotranslate_english_variant',
 	'cotranslate_enable_frontend_editor',
 	'cotranslate_show_floating_switcher',
 	'cotranslate_floating_position',
