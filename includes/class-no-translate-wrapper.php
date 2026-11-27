@@ -202,10 +202,30 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 	}
 
 	/**
-	 * Slugs skyddas inte — de ska inte innehålla varumärkesord.
+	 * Översätt en slug med skydd av termer.
+	 *
+	 * Sluggar gick förut direkt till motorn, så namn som skulle stå kvar
+	 * översattes i adressen: "vansbrosimningen" blev "vansbro-swim" och
+	 * "sallyprovet" "the-sally-test", trots att texten på sidan behöll dem.
+	 * Innehåller sluggen en skyddad term översätts den nu som text, med
+	 * samma skydd (och artikelregel) som annan text.
 	 */
 	public function translate_slug( $slug, $source_lang, $target_lang ) {
-		return $this->inner->translate_slug( $slug, $source_lang, $target_lang );
+		$terms = $this->get_terms_for_language( $target_lang );
+		$text  = str_replace( '-', ' ', (string) $slug );
+		if ( empty( array_filter( $terms ) ) ) {
+			return $this->inner->translate_slug( $slug, $source_lang, $target_lang );
+		}
+		list( , $map ) = self::protect( $text, $terms );
+		if ( empty( $map ) ) {
+			return $this->inner->translate_slug( $slug, $source_lang, $target_lang );
+		}
+		$result = $this->translate_text( array( $text ), $source_lang, $target_lang );
+		if ( ! is_array( $result ) ) {
+			return $result;
+		}
+		$translated = sanitize_title( (string) ( $result[0] ?? '' ) );
+		return '' !== $translated ? $translated : $slug;
 	}
 
 	/**

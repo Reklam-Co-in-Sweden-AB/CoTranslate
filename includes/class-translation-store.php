@@ -65,6 +65,9 @@ class CoTranslate_Translation_Store {
 		$slug     = $data['slug'] ?? '';
 		$meta_desc = $data['meta_desc'] ?? '';
 
+		// En befintlig översatt slug skrivs aldrig över automatiskt. Adressen
+		// ska vara stabil när en sida redigeras och översätts om, och en slug
+		// som rättats för hand ska stå kvar. Bara en tom slug fylls i.
 		// phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 		$sql = $wpdb->prepare(
 			"INSERT INTO {$this->table_translations}
@@ -75,7 +78,7 @@ class CoTranslate_Translation_Store {
 				translated_title = IF(is_manual = 0, VALUES(translated_title), translated_title),
 				translated_content = IF(is_manual = 0, VALUES(translated_content), translated_content),
 				translated_excerpt = IF(is_manual = 0, VALUES(translated_excerpt), translated_excerpt),
-				translated_slug = IF(is_manual = 0, VALUES(translated_slug), translated_slug),
+				translated_slug = IF(is_manual = 0 AND translated_slug = '', VALUES(translated_slug), translated_slug),
 				translated_meta_desc = IF(is_manual = 0, VALUES(translated_meta_desc), translated_meta_desc),
 				status = IF(is_manual = 0, 'auto', status),
 				deepl_chars_used = IF(is_manual = 0, VALUES(deepl_chars_used), deepl_chars_used)",

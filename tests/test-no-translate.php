@@ -169,5 +169,29 @@ $fake2 = new Fake_Engine();
 $out2  = ( new CoTranslate_No_Translate_Wrapper( $fake2 ) )->translate_text( array( 'Utan termer' ), 'sv', 'en' );
 check( 'utan träffar: bara ett vanligt anrop', array( count( $fake2->calls ), $out2 ), array( 1, array( '[en]Utan termer' ) ) );
 
+// --- Sluggar med skyddade termer ------------------------------------------
+if ( ! function_exists( 'sanitize_title' ) ) {
+	function sanitize_title( $t ) {
+		return trim( preg_replace( '/[^a-z0-9]+/', '-', strtolower( $t ) ), '-' );
+	}
+}
+class Slug_Engine extends Fake_Engine {
+	public $slug_calls = 0;
+	public function translate_slug( $slug, $s, $t ) {
+		$this->slug_calls++;
+		return 'engine-' . $slug;
+	}
+	public function translate_text_as_html( array $texts, $s, $t ) {
+		// Som DeepL: översätter runt de skyddade elementen.
+		return array_map( function ( $x ) { return str_replace( 'valkommen till', 'welcome to', $x ); }, $texts );
+	}
+}
+$GLOBALS['test_options']['cotranslate_no_translate_terms'] = array( '_all' => "Vansbro Vintersim\nVansbrosimningen" );
+$se = new Slug_Engine();
+$sw = new CoTranslate_No_Translate_Wrapper( $se );
+check( 'slug med term översätts med skydd', $sw->translate_slug( 'valkommen-till-vansbro-vintersim', 'sv', 'en' ), 'welcome-to-vansbro-vintersim' );
+check( 'slug utan term går till motorn', $sw->translate_slug( 'om-oss', 'sv', 'en' ), 'engine-om-oss' );
+check( 'motorns slug-metod anropades en gång', $se->slug_calls, 1 );
+
 echo $fails ? "\n$fails test misslyckades\n" : "\nAlla test gröna\n";
 exit( $fails ? 1 : 0 );
