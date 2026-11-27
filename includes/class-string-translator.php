@@ -47,6 +47,14 @@ class CoTranslate_String_Translator {
 	private $normalized_dictionary = null;
 
 	/**
+	 * Alla färdiga översättningar på sidans språk (strängar, titlar och
+	 * utdrag), normaliserade. Byggs vid första behov under insamlingen.
+	 *
+	 * @var array|null text => true
+	 */
+	private $translated_outputs = null;
+
+	/**
 	 * Alla kända källtexter för språket, även de som väntar på översättning.
 	 * Används för att inte köa samma sträng om och om igen.
 	 */
@@ -888,6 +896,26 @@ class CoTranslate_String_Translator {
 	}
 
 	/**
+	 * Är texten en färdig översättning på sidans språk?
+	 *
+	 * @param string $text Text från sidan.
+	 * @return bool
+	 */
+	private function is_translated_output( $text ) {
+		if ( null === $this->translated_outputs ) {
+			$this->translated_outputs = array();
+			$language                 = cotranslate_get_current_language();
+			foreach ( array_keys( $this->store->get_translated_outputs( $language ) ) as $output ) {
+				$key = self::normalize_edges( $output );
+				if ( '' !== $key ) {
+					$this->translated_outputs[ $key ] = true;
+				}
+			}
+		}
+		return isset( $this->translated_outputs[ self::normalize_edges( $text ) ] );
+	}
+
+	/**
 	 * Köa oöversatta strängar för bakgrundsöversättning.
 	 */
 	public function queue_untranslated() {
@@ -905,7 +933,21 @@ class CoTranslate_String_Translator {
 			return;
 		}
 
-		$texts = array_keys( $this->untranslated );
+		// Färdiga översättningar köas aldrig som källtext. Titlar i t.ex.
+		// nyhetslistor kan nå bufferten utan att ha gått genom the_title under
+		// samma sidvisning (cachade moduler), och då missar spärren i
+		// collect_untranslated_strings() dem. Köades de skickades engelskan
+		// till motorn som om den vore svenska: "Welcome to Vansbro Vintersim!"
+		// blev "Vansbro Vintersim Welcome!" och ersatte den riktiga titeln.
+		// Kontrollen görs här, där texter från textnoder, attribut och
+		// <title> möts.
+		$texts = array_values( array_filter( array_keys( $this->untranslated ), function ( $text ) {
+			return ! $this->is_translated_output( (string) $text );
+		} ) );
+
+		if ( empty( $texts ) ) {
+			return;
+		}
 
 		// Spara med tom translated_text som markör för "behöver översättas",
 		// och kom ihåg vilken sida texten först sågs på (filtret "Hittad på").
