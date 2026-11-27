@@ -243,7 +243,7 @@ class CoTranslate_Post_Translator {
 	 */
 	public static function restore_slug_diacritics( $slug, $reference ) {
 		// Taggar byts mot mellanslag — annars växer "</h2><p>" ihop två ord.
-		$reference = preg_replace( '#<(script|style)[^>]*>.*?</\1>#si', ' ', (string) $reference );
+		$reference = preg_replace( '#<(script|style)[^>]*>.*?</\1\s*>#si', ' ', (string) $reference );
 		$reference = html_entity_decode( preg_replace( '/<[^>]*>/', ' ', $reference ), ENT_QUOTES, 'UTF-8' );
 
 		if ( ! preg_match_all( '/[\p{L}\p{N}]+/u', $reference, $matches ) ) {

@@ -119,7 +119,7 @@ class CoTranslate_String_Translator {
 	 * @return string[] Unika textnoder.
 	 */
 	public static function text_nodes( $html ) {
-		$clean = preg_replace( '#<(script|style|noscript|svg)[^>]*>.*?</\1>#si', '', (string) $html );
+		$clean = preg_replace( '#<(script|style|noscript|svg)[^>]*>.*?</\1\s*>#si', '', (string) $html );
 		$clean = preg_replace( '#<!--.*?-->#s', '', $clean );
 
 		// Fragmentet saknar omgivande taggar, så första och sista noden
@@ -462,7 +462,7 @@ class CoTranslate_String_Translator {
 		$protected = array();
 		$counter   = 0;
 		$html = preg_replace_callback(
-			'#(<!--.*?-->|<(?:script|style|textarea|code|noscript|svg)[^>]*>.*?</(?:script|style|textarea|code|noscript|svg)>)#si',
+			'#(<!--.*?-->|<(?:script|style|textarea|code|noscript|svg)[^>]*>.*?</(?:script|style|textarea|code|noscript|svg)\s*>)#si',
 			function ( $matches ) use ( &$protected, &$counter ) {
 				$placeholder = '<!--COTRANSLATE_PROTECTED_' . $counter . '-->';
 				$protected[ $placeholder ] = $matches[0];
@@ -823,8 +823,11 @@ class CoTranslate_String_Translator {
 	 * @param string $html HTML att analysera.
 	 */
 	private function collect_untranslated_strings( $html ) {
-		// Ta bort script, style, noscript, svg — dessa ska inte översättas
-		$clean = preg_replace( '#<(script|style|noscript|svg)[^>]*>.*?</\1>#si', '', $html );
+		// Ta bort script, style, noscript, svg — dessa ska inte översättas.
+		// Sluttaggen får ha blanksteg före ">" ("</script >" är giltig HTML).
+		// Utan det sträckte sig skriptet till nästa </script> längre ned och
+		// allt däremellan – på Vansbrosimningen hela sidfoten – hoppades över.
+		$clean = preg_replace( '#<(script|style|noscript|svg)[^>]*>.*?</\1\s*>#si', '', $html );
 
 		// Ta bort HTML-kommentarer. Innehållet i dem är inte synlig text, och
 		// en kommentar med en litteral tagg i sig (t.ex. `<!-- … <img> … -->`)

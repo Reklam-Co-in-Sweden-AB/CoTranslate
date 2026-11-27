@@ -257,7 +257,7 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 		}, $clean ) ) . ')(?=s?(?!\p{L}))/iu';
 
 		$parts = preg_split(
-			'/(<!--.*?-->|<script\b.*?<\/script>|<style\b.*?<\/style>|<[^>]*>)/is',
+			'/(<!--.*?-->|<script\b.*?<\/script\s*>|<style\b.*?<\/style\s*>|<[^>]*>)/is',
 			$text,
 			-1,
 			PREG_SPLIT_DELIM_CAPTURE

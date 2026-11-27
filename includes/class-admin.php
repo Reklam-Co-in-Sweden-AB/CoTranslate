@@ -2466,7 +2466,7 @@ class CoTranslate_Admin {
 	 */
 	private function extract_visible_text( $html ) {
 		// Ta bort script, style, noscript, svg
-		$clean = preg_replace( '#<(script|style|noscript|svg)[^>]*>.*?</\1>#si', '', $html );
+		$clean = preg_replace( '#<(script|style|noscript|svg)[^>]*>.*?</\1\s*>#si', '', $html );
 
 		// Ta bort HTML-kommentarer — samma skäl som i String Translator:
 		// en kommentar med en litteral tagg i sig läcker annars in sitt `-->`

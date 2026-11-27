@@ -146,5 +146,22 @@ check( 'normalize_edges', CoTranslate_String_Translator::normalize_edges( "\u{00
 
 check( 'gränsen för långa textnoder är 5000', CoTranslate_String_Translator::MAX_TEXT_LENGTH, 5000 );
 
+// --- Sluttagg med blanksteg: "</script >" ----------------------------------
+// Nyhetsbrevsformuläret på Vansbrosimningen stänger sitt skript med
+// "</script >". Mönstret krävde "</script>", så skriptet sträckte sig till
+// nästa </script> och hela sidfoten mellan dem hoppades över.
+$page = '<script type="text/javascript">function validateForm() { return true; }</script >'
+	. '<footer><p>Kontakta oss</p><a class="btn">Få vårt nyhetsbrev</a></footer>'
+	. '<script>var x = 1;</script>';
+$dict->setValue( $obj, array( 'Få vårt nyhetsbrev' => 'Sign up for our newsletter' ) );
+$norm->setValue( $obj, null );
+$out = $method->invoke( $obj, $page );
+check( 'text efter "</script >" översätts', strpos( $out, '>Sign up for our newsletter<' ) !== false, true );
+check( 'skriptet lämnas orört', strpos( $out, 'function validateForm() { return true; }</script >' ) !== false, true );
+$untranslated->setValue( $obj, array() );
+$collect->invoke( $obj, $page );
+check( 'text efter "</script >" samlas in', in_array( 'Kontakta oss', array_keys( $untranslated->getValue( $obj ) ), true ), true );
+check( 'skriptkod samlas inte in', in_array( 'function validateForm() { return true; }', array_keys( $untranslated->getValue( $obj ) ), true ), false );
+
 echo $fails ? "\n$fails test misslyckades\n" : "\nAlla test gröna\n";
 exit( $fails ? 1 : 0 );
