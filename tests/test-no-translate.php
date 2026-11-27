@@ -59,6 +59,32 @@ check( 'gammal platshållare tas bort', $W::restore( 'a<!--COTRANSLATE_NT_3--> b
 list( $prot6, $map6 ) = $W::protect( 'Köp hos H&amp;M', array( 'H&M' ) );
 check( 'H&M hittas i escapad text', count( $map6 ), 1 );
 
+// --- DeepL böjer termen utanför elementet eller tappar mellanslaget ----
+$terms = array( 'Vansbro Vintersim', 'Vansbro Tjejsim', 'Sallyprovet', 'Vansbrosimningen' );
+list( $p, $m, $a ) = $W::protect( 'Välkommen till Vansbro Vintersim!', $terms );
+check( 'ändelse direkt efter termen', $W::restore( 'Welcome to <span translate="no" data-cotranslate-nt="0">Vansbro Vintersim</span>ing!', $m, $a ), 'Welcome to Vansbro Vintersim!' );
+list( $p, $m, $a ) = $W::protect( 'Hon vann Vansbro Tjejsim med tiden 11:21', $terms );
+check( 'tappat mellanslag läggs tillbaka', $W::restore( 'She won the <span translate="no" data-cotranslate-nt="0">Vansbro Tjejsim</span>with a time of 11:21', $m, $a ), 'She won the Vansbro Tjejsim with a time of 11:21' );
+check( 'ihopklistrat ord före termen', $W::restore( 'it was the<span translate="no" data-cotranslate-nt="0">Vansbro Tjejsim</span> that', $m, $a ), 'it was the Vansbro Tjejsim that' );
+list( $p, $m, $a ) = $W::protect( 'Sallyprovet är 200 meter', $terms );
+check( 'ändelse "t" tas bort', $W::restore( 'The <span translate="no" data-cotranslate-nt="0">Sallyprovet</span>t is 200 meters', $m, $a ), 'The Sallyprovet is 200 meters' );
+list( $p, $m, $a ) = $W::protect( 'Vansbrosimningens arena', $terms );
+check( 'genitiv-s i källan noteras', $a, array( 0 => array( 'before' => false, 'after' => true ) ) );
+check( 'genitiv-s från källan står kvar', $W::restore( 'the <span translate="no" data-cotranslate-nt="0">Vansbrosimningen</span>s arena', $m, $a ), 'the Vansbrosimningens arena' );
+check( 'utan attached-uppgift lämnas grannbokstäver', $W::restore( '<span translate="no" data-cotranslate-nt="0">X</span>ing', array( 0 => 'Vintersim' ) ), 'Vintersiming' );
+check( 'apostrof-genitiv rörs inte', $W::restore( 'the <span translate="no" data-cotranslate-nt="0">Vansbrosimningen</span>’s finish', array( 0 => 'Vansbrosimningen' ), array( 0 => array( 'before' => false, 'after' => false ) ) ), 'the Vansbrosimningen’s finish' );
+
+// Bara hela ord (och genitiv-s) skyddas.
+list( $p, $m ) = $W::protect( 'Nattsimmarna och Vansbro Nattsim', array( 'Nattsim', 'Vansbro Nattsim' ) );
+check( 'term inne i längre ord skyddas inte', $m, array( 0 => 'Vansbro Nattsim' ) );
+list( $p, $m ) = $W::protect( 'Vansbrosimningens arena, Vansbrosimningen.', array( 'Vansbrosimningen' ) );
+check( 'genitiv-s och skiljetecken skyddas', count( $m ), 2 );
+list( $p, $m ) = $W::protect( 'Ungdomsvansbro', array( 'Vansbro' ) );
+check( 'term i slutet av längre ord skyddas inte', $m, array() );
+check( 'okänd kort ändelse tas bort', $W::restore( 'the <span translate="no" data-cotranslate-nt="0">X</span>e Senior', array( 0 => 'Vansbro Triathlon Medeldistans' ), array( 0 => array( 'before' => false, 'after' => false ) ) ), 'the Vansbro Triathlon Medeldistans Senior' );
+check( 'versalord får mellanslag', $W::restore( '<span translate="no" data-cotranslate-nt="0">X</span>Elite', array( 0 => 'Vansbro Tjejsim' ), array( 0 => array( 'before' => false, 'after' => false ) ) ), 'Vansbro Tjejsim Elite' );
+check( 'PM före termen får mellanslag', $W::restore( '2:00 PM<span translate="no" data-cotranslate-nt="0">X</span>', array( 0 => 'Vansbro Halvsim' ), array( 0 => array( 'before' => false, 'after' => false ) ) ), '2:00 PM Vansbro Halvsim' );
+
 // --- translate_text genom wrappern med en låtsasmotor -------------------
 class Fake_Engine implements CoTranslate_Translator {
 	public $calls = array();

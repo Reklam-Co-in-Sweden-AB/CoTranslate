@@ -66,13 +66,15 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 		$plain     = array();
 		$protected = array();
 		$maps      = array();
+		$attached  = array();
 		foreach ( $texts as $i => $text ) {
-			list( $p, $map ) = self::protect( htmlspecialchars( (string) $text, ENT_NOQUOTES, 'UTF-8' ), $terms );
+			list( $p, $map, $att ) = self::protect( htmlspecialchars( (string) $text, ENT_NOQUOTES, 'UTF-8' ), $terms );
 			if ( empty( $map ) ) {
 				$plain[ $i ] = $text;
 			} else {
 				$protected[ $i ] = $p;
 				$maps[ $i ]      = $map;
+				$attached[ $i ]  = $att;
 			}
 		}
 
@@ -99,7 +101,7 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 			return $translated;
 		}
 		foreach ( array_keys( $protected ) as $n => $i ) {
-			$restored     = self::restore( $translated[ $n ] ?? '', $maps[ $i ] );
+			$restored     = self::restore( $translated[ $n ] ?? '', $maps[ $i ], $attached[ $i ] );
 			$result[ $i ] = htmlspecialchars_decode( $restored, ENT_QUOTES | ENT_HTML5 );
 		}
 
@@ -119,9 +121,9 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 		if ( empty( array_filter( $terms ) ) ) {
 			return $this->inner->translate_html( $html, $source_lang, $target_lang );
 		}
-		list( $protected, $map ) = self::protect( $html, $terms );
+		list( $protected, $map, $attached ) = self::protect( $html, $terms );
 		$result = $this->inner->translate_html( $protected, $source_lang, $target_lang );
-		return is_string( $result ) ? self::restore( $result, $map ) : $result;
+		return is_string( $result ) ? self::restore( $result, $map, $attached ) : $result;
 	}
 
 	/**
@@ -148,8 +150,11 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 	 *
 	 * @param string $text  Text eller HTML som ska översättas.
 	 * @param array  $terms Lista med termer (strängar).
-	 * @return array array( string $protected_text, array $map ) där $map är
-	 *               löpnummer => originalträff.
+	 * @return array array( string $protected_text, array $map, array $attached )
+	 *               där $map är löpnummer => originalträff och $attached är
+	 *               löpnummer => array( 'before' => bool, 'after' => bool ),
+	 *               dvs. om träffen satt ihop med en bokstav i källtexten
+	 *               (t.ex. genitiv-s: "Vansbrosimningens").
 	 */
 	public static function protect( $text, array $terms ) {
 		$clean = array();
@@ -162,16 +167,19 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 			}
 		}
 		if ( empty( $clean ) || '' === (string) $text ) {
-			return array( $text, array() );
+			return array( $text, array(), array() );
 		}
 		$clean = array_keys( $clean );
 		usort( $clean, function ( $a, $b ) {
 			return mb_strlen( $b ) - mb_strlen( $a );
 		} );
 
-		$pattern = '/' . implode( '|', array_map( function ( $term ) {
+		// Bara hela ord, eventuellt med genitiv-s ("Vansbrosimningens"). En
+		// term inne i ett längre ord ("Nattsim" i "nattsimmarna") skyddas
+		// inte: motorn fick då ett halvt ord och skrev t.ex. "swimmenattsimers".
+		$pattern = '/(?<!\p{L})(?:' . implode( '|', array_map( function ( $term ) {
 			return preg_quote( $term, '/' );
-		}, $clean ) ) . '/iu';
+		}, $clean ) ) . ')(?=s?(?!\p{L}))/iu';
 
 		$parts = preg_split(
 			'/(<!--.*?-->|<script\b.*?<\/script>|<style\b.*?<\/style>|<[^>]*>)/is',
@@ -180,11 +188,12 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 			PREG_SPLIT_DELIM_CAPTURE
 		);
 		if ( false === $parts ) {
-			return array( $text, array() );
+			return array( $text, array(), array() );
 		}
 
-		$map     = array();
-		$counter = 0;
+		$map      = array();
+		$attached = array();
+		$counter  = 0;
 		foreach ( $parts as $k => $part ) {
 			// Udda index är taggar, kommentarer, script och style.
 			if ( 1 === $k % 2 || '' === $part ) {
@@ -192,18 +201,26 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 			}
 			$replaced = preg_replace_callback(
 				$pattern,
-				function ( $m ) use ( &$map, &$counter ) {
-					$map[ $counter ] = $m[0];
-					return '<span translate="no" ' . self::MARKER_ATTR . '="' . $counter++ . '">' . $m[0] . '</span>';
+				function ( $m ) use ( &$map, &$attached, &$counter, $part ) {
+					list( $match, $offset ) = $m[0];
+					$map[ $counter ]        = $match;
+					$attached[ $counter ]   = array(
+						'before' => 1 === preg_match( '/\p{L}$/u', substr( $part, 0, $offset ) ),
+						'after'  => 1 === preg_match( '/^\p{L}/u', substr( $part, $offset + strlen( $match ) ) ),
+					);
+					return '<span translate="no" ' . self::MARKER_ATTR . '="' . $counter++ . '">' . $match . '</span>';
 				},
-				$part
+				$part,
+				-1,
+				$count,
+				PREG_OFFSET_CAPTURE
 			);
 			if ( null !== $replaced ) {
 				$parts[ $k ] = $replaced;
 			}
 		}
 
-		return array( implode( '', $parts ), $map );
+		return array( implode( '', $parts ), $map, $attached );
 	}
 
 	/**
@@ -213,21 +230,49 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 	 * Platshållare i det gamla kommentarformatet tas bort om de skulle dyka
 	 * upp, så att de aldrig hamnar i en publicerad översättning.
 	 *
-	 * @param string $text Översatt text.
-	 * @param array  $map  löpnummer => originalträff.
+	 * DeepL låter termen vara men kan böja den utanför elementet
+	 * ("<span>Vansbro Vintersim</span>ing") eller tappa mellanslaget efter
+	 * det ("<span>Vansbro Tjejsim</span>with"). Satt termen inte ihop med en
+	 * bokstav i källtexten tas en kort ändelse (högst tre gemener) bort och
+	 * ett längre ord får tillbaka sitt mellanslag. Samma sak gäller ett ord som klistrats ihop
+	 * framför termen.
+	 *
+	 * @param string $text     Översatt text.
+	 * @param array  $map      löpnummer => originalträff.
+	 * @param array  $attached löpnummer => array( 'before' => bool, 'after' => bool ),
+	 *                         från protect(). Utan uppgift lämnas grannbokstäver orörda.
 	 * @return string
 	 */
-	public static function restore( $text, array $map ) {
+	public static function restore( $text, array $map, array $attached = array() ) {
 		if ( empty( $map ) || ! is_string( $text ) ) {
 			return $text;
 		}
-		$text = preg_replace_callback(
-			'/<span\b[^>]*\b' . preg_quote( self::MARKER_ATTR, '/' ) . '\s*=\s*["\']?(\d+)["\']?[^>]*>(.*?)<\/span>/is',
-			function ( $m ) use ( $map ) {
-				return isset( $map[ (int) $m[1] ] ) ? $map[ (int) $m[1] ] : $m[2];
+		$restored = preg_replace_callback(
+			'/(\p{L}?)<span\b[^>]*\b' . preg_quote( self::MARKER_ATTR, '/' ) . '\s*=\s*["\']?(\d+)["\']?[^>]*>(.*?)<\/span>(\p{L}*)/isu',
+			function ( $m ) use ( $map, $attached ) {
+				$n      = (int) $m[2];
+				$term   = isset( $map[ $n ] ) ? $map[ $n ] : $m[3];
+				$before = $m[1];
+				$after  = $m[4];
+
+				if ( isset( $attached[ $n ] ) ) {
+					if ( '' !== $after && empty( $attached[ $n ]['after'] ) ) {
+						// Kort ändelse med gemener ("s", "e", "ing") är en böjning
+						// som tas bort; längre eller versal är ett eget ord.
+						$after = preg_match( '/^\p{Ll}{1,3}$/u', $after ) ? '' : ' ' . $after;
+					}
+					if ( '' !== $before && empty( $attached[ $n ]['before'] ) ) {
+						$before .= ' ';
+					}
+				}
+
+				return $before . $term . $after;
 			},
 			$text
 		);
-		return preg_replace( '/<!--COTRANSLATE_NT_\d+-->/', '', $text );
+		if ( null === $restored ) {
+			$restored = $text;
+		}
+		return preg_replace( '/<!--COTRANSLATE_NT_\d+-->/', '', $restored );
 	}
 }

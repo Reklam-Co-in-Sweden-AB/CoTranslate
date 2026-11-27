@@ -31,6 +31,13 @@ class CoTranslate_String_Translator {
 	private $dictionary = array();
 
 	/**
+	 * Ordboken med normaliserade nycklar, byggs vid första behov.
+	 *
+	 * @var array|null
+	 */
+	private $normalized_dictionary = null;
+
+	/**
 	 * Alla kända källtexter för språket, även de som väntar på översättning.
 	 * Används för att inte köa samma sträng om och om igen.
 	 */
@@ -171,7 +178,8 @@ class CoTranslate_String_Translator {
 		$this->unplaced = $this->store->get_unplaced_strings( $language );
 
 		// Bara färdiga översättningar får användas för ersättning.
-		$this->dictionary = array_filter( $all, function ( $translated ) {
+		$this->normalized_dictionary = null;
+		$this->dictionary            = array_filter( $all, function ( $translated ) {
 			return '' !== (string) $translated;
 		} );
 
@@ -360,6 +368,50 @@ class CoTranslate_String_Translator {
 	}
 
 	/**
+	 * Ta bort alla sorters blanksteg i början och slutet av en text.
+	 *
+	 * Skannern sparar texten med PHP:s trim(), som bara tar bort vanliga
+	 * blanksteg. Hårda (U+00A0) och smala hårda (U+202F) mellanslag, vanliga i
+	 * text som klistrats in från Word, ligger kvar i källtexten. Matchningen
+	 * av textnoder tar däremot bort alla blanksteg, så texten hittades aldrig
+	 * i ordboken och visades på originalspråket. Uppslagningen görs därför
+	 * också på den normaliserade formen.
+	 *
+	 * @param string $text Text.
+	 * @return string Text utan blanksteg i kanterna.
+	 */
+	public static function normalize_edges( $text ) {
+		$normalized = preg_replace( '/^[\s\x{200B}\x{FEFF}]+|[\s\x{200B}\x{FEFF}]+$/u', '', (string) $text );
+		return null === $normalized ? (string) $text : $normalized;
+	}
+
+	/**
+	 * Ordboken med normaliserade nycklar (se normalize_edges()).
+	 *
+	 * Exakta nycklar har alltid företräde; den normaliserade formen läggs
+	 * bara till där den inte redan finns.
+	 *
+	 * @return array Normaliserad källtext => normaliserad översättning.
+	 */
+	private function get_normalized_dictionary() {
+		if ( null !== $this->normalized_dictionary ) {
+			return $this->normalized_dictionary;
+		}
+		$this->normalized_dictionary = array();
+		foreach ( $this->dictionary as $source => $translated ) {
+			$key = self::normalize_edges( $source );
+			if ( '' === $key || isset( $this->dictionary[ $key ] ) || isset( $this->normalized_dictionary[ $key ] ) ) {
+				continue;
+			}
+			$value = self::normalize_edges( $translated );
+			if ( '' !== $value && $value !== $key ) {
+				$this->normalized_dictionary[ $key ] = $value;
+			}
+		}
+		return $this->normalized_dictionary;
+	}
+
+	/**
 	 * Översätt textnoder i HTML.
 	 *
 	 * Använder strtr() för simultana ersättningar (undviker dubbel-ersättning).
@@ -403,6 +455,8 @@ class CoTranslate_String_Translator {
 			$html
 		);
 
+		$normalized_dictionary = $this->get_normalized_dictionary();
+
 		// Steg 2: Ersätt BARA text mellan HTML-taggar (>text<), inte inne i attribut.
 		//
 		// Matcha på HELA textnoden (trimmad), inte som delsträng. Tidigare
@@ -414,7 +468,7 @@ class CoTranslate_String_Translator {
 		// och konsekvent med övriga översättningsmetoder i klassen.
 		$html = preg_replace_callback(
 			'#(>)([^<]+)(<)#',
-			function ( $matches ) use ( $replacements ) {
+			function ( $matches ) use ( $replacements, $normalized_dictionary ) {
 				$text = $matches[2];
 
 				// Hoppa över om bara whitespace
@@ -429,10 +483,15 @@ class CoTranslate_String_Translator {
 				$decoded = html_entity_decode( $core, ENT_QUOTES, 'UTF-8' );
 
 				// Exakt matchning mot ordlistan (avkodad eller rå).
+				$normalized = self::normalize_edges( $decoded );
 				if ( isset( $replacements[ $decoded ] ) ) {
 					$translated = $replacements[ $decoded ];
 				} elseif ( isset( $replacements[ $core ] ) ) {
 					$translated = $replacements[ $core ];
+				} elseif ( isset( $replacements[ $normalized ] ) ) {
+					$translated = $replacements[ $normalized ];
+				} elseif ( isset( $normalized_dictionary[ $normalized ] ) ) {
+					$translated = $normalized_dictionary[ $normalized ];
 				} else {
 					return $matches[0];
 				}
@@ -487,6 +546,11 @@ class CoTranslate_String_Translator {
 
 					if ( isset( $this->dictionary[ $decoded ] ) ) {
 						return str_replace( $original, esc_attr( $this->dictionary[ $decoded ] ), $matches[0] );
+					}
+					$normalized_dictionary = $this->get_normalized_dictionary();
+					$normalized            = self::normalize_edges( $decoded );
+					if ( isset( $normalized_dictionary[ $normalized ] ) ) {
+						return str_replace( $original, esc_attr( $normalized_dictionary[ $normalized ] ), $matches[0] );
 					}
 
 					// Samla som oöversatt

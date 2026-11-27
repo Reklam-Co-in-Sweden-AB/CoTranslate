@@ -125,5 +125,24 @@ check( 'title: helt okänd titel lämnas orörd och köas',
 	'<title>Karriere – Jobb</title>' );
 check( 'title: okända delar och hela titeln köas som källtext', array_keys( $untr->getValue( $obj ) ), array( 'Karriere', 'Jobb', 'Karriere – Jobb' ) );
 
+// --- Hårda och smala mellanslag i kanten av källtexten ---
+// Skannern sparar källtexten med trim(), så U+202F/U+00A0 i kanten ligger
+// kvar. Textnoden trimmas med \s/u, som tar bort dem. Utan normaliserad
+// uppslagning visades texten på svenska (Vansbrosimningens Vintersim-sida).
+$dict->setValue( $obj, array(
+	"Dykning i vattnet är inte tillåtet.\u{202F}\u{202F}" => "Diving into the water is not permitted.\u{202F}\u{202F}",
+	"Anmälan till Vansbro Vintersim är nu öppen.\u{00A0}" => "Registration for the Vansbro Vintersim is now open.\u{00A0}",
+	'Dykning' => 'Diving',
+) );
+$norm = $ref->getProperty( 'normalized_dictionary' );
+if ( PHP_VERSION_ID < 80100 ) { $norm->setAccessible( true ); }
+$norm->setValue( $obj, null );
+$out = $method->invoke( $obj, "<p><span>Dykning i vattnet är inte tillåtet.\u{202F}\u{202F}</span></p><a href=\"#\">Anmälan till Vansbro Vintersim är nu öppen.&nbsp;</a><b>Dykning</b>" );
+check( 'smalt hårt mellanslag i kanten matchar', strpos( $out, 'Diving into the water is not permitted.' ) !== false, true );
+check( 'blanksteget runt texten bevaras', strpos( $out, "permitted.\u{202F}\u{202F}</span>" ) !== false, true );
+check( '&nbsp; i kanten matchar', strpos( $out, 'Registration for the Vansbro Vintersim is now open.' ) !== false, true );
+check( 'exakt nyckel har fortfarande företräde', strpos( $out, '<b>Diving</b>' ) !== false, true );
+check( 'normalize_edges', CoTranslate_String_Translator::normalize_edges( "\u{00A0} Hej \u{202F}\u{200B}" ), 'Hej' );
+
 echo $fails ? "\n$fails test misslyckades\n" : "\nAlla test gröna\n";
 exit( $fails ? 1 : 0 );
