@@ -564,8 +564,14 @@ class CoTranslate_String_Translator {
 					if ( isset( $this->dictionary[ $decoded ] ) ) {
 						return str_replace( $original, esc_attr( $this->dictionary[ $decoded ] ), $matches[0] );
 					}
+					// Blanksteg i kanten ("Anmäl dig här "): den normaliserade
+					// ordboken saknar nycklar som redan finns exakt, så slå
+					// upp den trimmade formen i båda.
 					$normalized_dictionary = $this->get_normalized_dictionary();
 					$normalized            = self::normalize_edges( $decoded );
+					if ( isset( $this->dictionary[ $normalized ] ) ) {
+						return str_replace( $original, esc_attr( $this->dictionary[ $normalized ] ), $matches[0] );
+					}
 					if ( isset( $normalized_dictionary[ $normalized ] ) ) {
 						return str_replace( $original, esc_attr( $normalized_dictionary[ $normalized ] ), $matches[0] );
 					}
@@ -944,8 +950,16 @@ class CoTranslate_String_Translator {
 		// blev "Vansbro Vintersim Welcome!" och ersatte den riktiga titeln.
 		// Kontrollen görs här, där texter från textnoder, attribut och
 		// <title> möts.
+		// Redan kända texter köas inte heller om. Lagret trimmar källtexten
+		// till samma rad, och köandet sparar en tom översättning – en känd
+		// text med blanksteg i kanten tömde annars den färdiga översättningen
+		// för hela sajten tills cron översatt den igen.
 		$texts = array_values( array_filter( array_keys( $this->untranslated ), function ( $text ) {
-			return ! $this->is_translated_output( (string) $text );
+			$text = (string) $text;
+			if ( isset( $this->known[ trim( $text ) ] ) || isset( $this->known[ self::normalize_edges( $text ) ] ) ) {
+				return false;
+			}
+			return ! $this->is_translated_output( $text );
 		} ) );
 
 		if ( empty( $texts ) ) {
