@@ -2,10 +2,15 @@
 /**
  * Wrapper som skyddar ord/fraser från översättning.
  *
- * Lindar den verkliga översättningsmotorn. Före översättning byts varje
- * skyddad term mot en HTML-kommentar-platshållare; efter svaret återställs
- * originaltermen. Eftersom wrappern sitter ovanför både Claude och DeepL i
- * factoryn täcks båda motorerna automatiskt.
+ * Lindar den verkliga översättningsmotorn. Före översättning läggs varje
+ * skyddad term i ett element med translate="no" (se MARKER_ATTR); efter
+ * svaret byts elementet tillbaka mot originaltermen. Eftersom wrappern
+ * sitter ovanför både Claude och DeepL i factoryn täcks båda motorerna.
+ *
+ * Termen ligger kvar som text inuti elementet. Tidigare användes en tom
+ * HTML-kommentar som platshållare, men den saknar text och är inte bunden
+ * till något ord, så DeepL flyttade den fritt i meningen och åt upp
+ * mellanslagen runt den ("3Vansbrosimningen,000 m", "dueVansbrosimningen to").
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -13,6 +18,9 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
+
+	/** Attribut som numrerar skyddade termer i den text som skickas iväg. */
+	const MARKER_ATTR = 'data-cotranslate-nt';
 
 	/** @var object Inre översättningsmotor. */
 	private $inner;
@@ -43,6 +51,11 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 
 	/**
 	 * Översätt en lista texter med skydd av termer.
+	 *
+	 * Texter utan skyddade termer går samma väg som förut. Texter med termer
+	 * HTML-escapas, får sina termer inlindade och översätts som HTML, så att
+	 * motorn respekterar translate="no". Efteråt återställs termerna och
+	 * escapningen tas bort, så att anroparen får tillbaka vanlig text.
 	 */
 	public function translate_text( array $texts, $source_lang, $target_lang ) {
 		$terms = $this->get_terms_for_language( $target_lang );
@@ -50,24 +63,52 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 			return $this->inner->translate_text( $texts, $source_lang, $target_lang );
 		}
 
-		$maps      = array();
+		$plain     = array();
 		$protected = array();
+		$maps      = array();
 		foreach ( $texts as $i => $text ) {
-			list( $p, $map ) = self::protect( $text, $terms );
-			$protected[ $i ] = $p;
-			$maps[ $i ]      = $map;
-		}
-
-		$result = $this->inner->translate_text( $protected, $source_lang, $target_lang );
-
-		if ( is_array( $result ) ) {
-			foreach ( $result as $i => $translated ) {
-				if ( isset( $maps[ $i ] ) ) {
-					$result[ $i ] = self::restore( $translated, $maps[ $i ] );
-				}
+			list( $p, $map ) = self::protect( htmlspecialchars( (string) $text, ENT_NOQUOTES, 'UTF-8' ), $terms );
+			if ( empty( $map ) ) {
+				$plain[ $i ] = $text;
+			} else {
+				$protected[ $i ] = $p;
+				$maps[ $i ]      = $map;
 			}
 		}
-		return $result;
+
+		if ( empty( $protected ) ) {
+			return $this->inner->translate_text( $texts, $source_lang, $target_lang );
+		}
+
+		$result = array();
+
+		if ( ! empty( $plain ) ) {
+			$translated = $this->inner->translate_text( array_values( $plain ), $source_lang, $target_lang );
+			if ( ! is_array( $translated ) ) {
+				return $translated;
+			}
+			foreach ( array_keys( $plain ) as $n => $i ) {
+				$result[ $i ] = $translated[ $n ] ?? '';
+			}
+		}
+
+		$translated = method_exists( $this->inner, 'translate_text_as_html' )
+			? $this->inner->translate_text_as_html( array_values( $protected ), $source_lang, $target_lang )
+			: $this->inner->translate_text( array_values( $protected ), $source_lang, $target_lang );
+		if ( ! is_array( $translated ) ) {
+			return $translated;
+		}
+		foreach ( array_keys( $protected ) as $n => $i ) {
+			$restored     = self::restore( $translated[ $n ] ?? '', $maps[ $i ] );
+			$result[ $i ] = htmlspecialchars_decode( $restored, ENT_QUOTES | ENT_HTML5 );
+		}
+
+		// Samma nycklar och ordning som indata.
+		$ordered = array();
+		foreach ( array_keys( $texts ) as $i ) {
+			$ordered[ $i ] = $result[ $i ] ?? '';
+		}
+		return array_values( $ordered );
 	}
 
 	/**
@@ -98,58 +139,95 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 	}
 
 	/**
-	 * Ersätt skyddade termer med platshållare.
+	 * Lägg skyddade termer i element som motorn inte översätter.
 	 *
-	 * @param string $text  Text som ska översättas.
+	 * Bara text utanför taggar berörs. Termer i attribut (href, alt och
+	 * liknande), kommentarer, <script> och <style> lämnas orörda, så att HTML:en
+	 * inte går sönder. Alla termer matchas i ett enda svep, längsta först, så
+	 * att en kortare term aldrig hamnar inuti en längre som redan skyddats.
+	 *
+	 * @param string $text  Text eller HTML som ska översättas.
 	 * @param array  $terms Lista med termer (strängar).
 	 * @return array array( string $protected_text, array $map ) där $map är
-	 *               platshållare => originalterm.
+	 *               löpnummer => originalträff.
 	 */
 	public static function protect( $text, array $terms ) {
-		$map     = array();
-		$counter = 0;
-
-		// Trimma, ta bort tomma, deduplicera och sortera längsta först så att
-		// en längre fras skyddas innan en kortare delsträng av den.
 		$clean = array();
 		foreach ( $terms as $term ) {
-			$term = trim( $term );
+			$term = trim( (string) $term );
 			if ( '' !== $term ) {
 				$clean[ $term ] = true;
+				// HTML och escapad text skriver t.ex. "H&M" som "H&amp;M".
+				$clean[ htmlspecialchars( $term, ENT_NOQUOTES, 'UTF-8' ) ] = true;
 			}
+		}
+		if ( empty( $clean ) || '' === (string) $text ) {
+			return array( $text, array() );
 		}
 		$clean = array_keys( $clean );
 		usort( $clean, function ( $a, $b ) {
 			return mb_strlen( $b ) - mb_strlen( $a );
 		} );
 
-		foreach ( $clean as $term ) {
-			// Skiftlägesokänslig sökning utan regex (säkert mot specialtecken).
-			$offset = 0;
-			while ( false !== ( $pos = mb_stripos( $text, $term, $offset ) ) ) {
-				$placeholder         = '<!--COTRANSLATE_NT_' . $counter . '-->';
-				$match               = mb_substr( $text, $pos, mb_strlen( $term ) );
-				$map[ $placeholder ] = $match;
-				$text                = mb_substr( $text, 0, $pos ) . $placeholder . mb_substr( $text, $pos + mb_strlen( $term ) );
-				$offset              = $pos + mb_strlen( $placeholder );
-				$counter++;
+		$pattern = '/' . implode( '|', array_map( function ( $term ) {
+			return preg_quote( $term, '/' );
+		}, $clean ) ) . '/iu';
+
+		$parts = preg_split(
+			'/(<!--.*?-->|<script\b.*?<\/script>|<style\b.*?<\/style>|<[^>]*>)/is',
+			$text,
+			-1,
+			PREG_SPLIT_DELIM_CAPTURE
+		);
+		if ( false === $parts ) {
+			return array( $text, array() );
+		}
+
+		$map     = array();
+		$counter = 0;
+		foreach ( $parts as $k => $part ) {
+			// Udda index är taggar, kommentarer, script och style.
+			if ( 1 === $k % 2 || '' === $part ) {
+				continue;
+			}
+			$replaced = preg_replace_callback(
+				$pattern,
+				function ( $m ) use ( &$map, &$counter ) {
+					$map[ $counter ] = $m[0];
+					return '<span translate="no" ' . self::MARKER_ATTR . '="' . $counter++ . '">' . $m[0] . '</span>';
+				},
+				$part
+			);
+			if ( null !== $replaced ) {
+				$parts[ $k ] = $replaced;
 			}
 		}
 
-		return array( $text, $map );
+		return array( implode( '', $parts ), $map );
 	}
 
 	/**
-	 * Återställ platshållare till originaltermer.
+	 * Byt tillbaka de inlindade termerna mot originalträffarna.
 	 *
-	 * @param string $text Text med platshållare.
-	 * @param array  $map  platshållare => originalterm.
+	 * Klarar att motorn ändrar citattecken eller ordning på attributen.
+	 * Platshållare i det gamla kommentarformatet tas bort om de skulle dyka
+	 * upp, så att de aldrig hamnar i en publicerad översättning.
+	 *
+	 * @param string $text Översatt text.
+	 * @param array  $map  löpnummer => originalträff.
 	 * @return string
 	 */
 	public static function restore( $text, array $map ) {
-		if ( empty( $map ) ) {
+		if ( empty( $map ) || ! is_string( $text ) ) {
 			return $text;
 		}
-		return str_replace( array_keys( $map ), array_values( $map ), $text );
+		$text = preg_replace_callback(
+			'/<span\b[^>]*\b' . preg_quote( self::MARKER_ATTR, '/' ) . '\s*=\s*["\']?(\d+)["\']?[^>]*>(.*?)<\/span>/is',
+			function ( $m ) use ( $map ) {
+				return isset( $map[ (int) $m[1] ] ) ? $map[ (int) $m[1] ] : $m[2];
+			},
+			$text
+		);
+		return preg_replace( '/<!--COTRANSLATE_NT_\d+-->/', '', $text );
 	}
 }
