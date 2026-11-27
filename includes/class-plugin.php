@@ -59,6 +59,11 @@ class CoTranslate_Plugin {
 	public $woocommerce;
 
 	/**
+	 * @var CoTranslate_Ninja_Tables
+	 */
+	public $ninja_tables;
+
+	/**
 	 * @var CoTranslate_SEO
 	 */
 	public $seo;
@@ -105,6 +110,7 @@ class CoTranslate_Plugin {
 		require_once $dir . 'class-string-translator.php';
 		require_once $dir . 'class-frontend-editor.php';
 		require_once $dir . 'class-woocommerce.php';
+		require_once $dir . 'class-ninja-tables.php';
 		require_once $dir . 'class-seo.php';
 
 		if ( is_admin() ) {
@@ -150,6 +156,10 @@ class CoTranslate_Plugin {
 		// WooCommerce-integration
 		$this->woocommerce = new CoTranslate_WooCommerce( $this->store, $this->url_handler );
 		$this->woocommerce->init();
+
+		// Ninja Tables: kolumnrubriker i tabellernas skriptkonfiguration
+		$this->ninja_tables = new CoTranslate_Ninja_Tables( $this->store );
+		$this->ninja_tables->init();
 
 		// SEO-integration
 		$this->seo = new CoTranslate_SEO( $this->store, $this->url_handler );
