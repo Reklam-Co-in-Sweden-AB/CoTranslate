@@ -28,6 +28,15 @@ class CoTranslate_String_Translator {
 	 * (tom translated_text) filtreras bort så att de aldrig ersätter synlig text
 	 * i attribut eller <title> med tom sträng.
 	 */
+	/**
+	 * Längsta textnod som samlas in för översättning.
+	 *
+	 * Gränsen var 500 tecken. Längre stycken i sidbyggarmoduler (historik,
+	 * partnertexter, villkor) samlades då aldrig in och visades på
+	 * originalspråket. Kolumnen source_text är TEXT, så 5000 ryms gott.
+	 */
+	const MAX_TEXT_LENGTH = 5000;
+
 	private $dictionary = array();
 
 	/**
@@ -841,7 +850,7 @@ class CoTranslate_String_Translator {
 			$text = trim( html_entity_decode( $raw_text, ENT_QUOTES, 'UTF-8' ) );
 
 			// Filtrera bort korta, tomma eller tekniska strängar
-			if ( mb_strlen( $text ) < 2 || mb_strlen( $text ) > 500 ) {
+			if ( mb_strlen( $text ) < 2 || mb_strlen( $text ) > self::MAX_TEXT_LENGTH ) {
 				continue;
 			}
 

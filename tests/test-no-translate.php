@@ -69,7 +69,7 @@ check( 'ihopklistrat ord före termen', $W::restore( 'it was the<span translate=
 list( $p, $m, $a ) = $W::protect( 'Sallyprovet är 200 meter', $terms );
 check( 'ändelse "t" tas bort', $W::restore( 'The <span translate="no" data-cotranslate-nt="0">Sallyprovet</span>t is 200 meters', $m, $a ), 'The Sallyprovet is 200 meters' );
 list( $p, $m, $a ) = $W::protect( 'Vansbrosimningens arena', $terms );
-check( 'genitiv-s i källan noteras', $a, array( 0 => array( 'before' => false, 'after' => true ) ) );
+check( 'genitiv-s i källan noteras', $a, array( 0 => array( 'before' => false, 'after' => true, 'space_before' => false ) ) );
 check( 'genitiv-s från källan står kvar', $W::restore( 'the <span translate="no" data-cotranslate-nt="0">Vansbrosimningen</span>s arena', $m, $a ), 'the Vansbrosimningens arena' );
 check( 'utan attached-uppgift lämnas grannbokstäver', $W::restore( '<span translate="no" data-cotranslate-nt="0">X</span>ing', array( 0 => 'Vintersim' ) ), 'Vintersiming' );
 check( 'apostrof-genitiv rörs inte', $W::restore( 'the <span translate="no" data-cotranslate-nt="0">Vansbrosimningen</span>’s finish', array( 0 => 'Vansbrosimningen' ), array( 0 => array( 'before' => false, 'after' => false ) ) ), 'the Vansbrosimningen’s finish' );
@@ -84,6 +84,15 @@ check( 'term i slutet av längre ord skyddas inte', $m, array() );
 check( 'okänd kort ändelse tas bort', $W::restore( 'the <span translate="no" data-cotranslate-nt="0">X</span>e Senior', array( 0 => 'Vansbro Triathlon Medeldistans' ), array( 0 => array( 'before' => false, 'after' => false ) ) ), 'the Vansbro Triathlon Medeldistans Senior' );
 check( 'versalord får mellanslag', $W::restore( '<span translate="no" data-cotranslate-nt="0">X</span>Elite', array( 0 => 'Vansbro Tjejsim' ), array( 0 => array( 'before' => false, 'after' => false ) ) ), 'Vansbro Tjejsim Elite' );
 check( 'PM före termen får mellanslag', $W::restore( '2:00 PM<span translate="no" data-cotranslate-nt="0">X</span>', array( 0 => 'Vansbro Halvsim' ), array( 0 => array( 'before' => false, 'after' => false ) ) ), '2:00 PM Vansbro Halvsim' );
+
+// Mellanslag före termen som tappats efter skiljetecken.
+list( $p, $m, $a ) = $W::protect( '14:00-16:30 Vansbro Halvsim', array( 'Vansbro Halvsim' ) );
+check( 'space_before noteras', $a[0]['space_before'], true );
+check( 'mellanslag efter "p.m." läggs tillbaka', $W::restore( '2:00–4:30 p.m.<span translate="no" data-cotranslate-nt="0">Vansbro Halvsim</span>', $m, $a ), '2:00–4:30 p.m. Vansbro Halvsim' );
+check( 'inget extra mellanslag efter citattecken', $W::restore( '“<span translate="no" data-cotranslate-nt="0">Vansbro Halvsim</span>”', $m, $a ), '“Vansbro Halvsim”' );
+check( 'inget extra mellanslag efter tagg', $W::restore( '<b><span translate="no" data-cotranslate-nt="0">Vansbro Halvsim</span></b>', $m, $a ), '<b>Vansbro Halvsim</b>' );
+list( $p, $m, $a ) = $W::protect( '(Vansbro Halvsim)', array( 'Vansbro Halvsim' ) );
+check( 'utan mellanslag i källan läggs inget till', $W::restore( '(<span translate="no" data-cotranslate-nt="0">Vansbro Halvsim</span>)', $m, $a ), '(Vansbro Halvsim)' );
 
 // --- translate_text genom wrappern med en låtsasmotor -------------------
 class Fake_Engine implements CoTranslate_Translator {

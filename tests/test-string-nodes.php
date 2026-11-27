@@ -144,5 +144,7 @@ check( '&nbsp; i kanten matchar', strpos( $out, 'Registration for the Vansbro Vi
 check( 'exakt nyckel har fortfarande företräde', strpos( $out, '<b>Diving</b>' ) !== false, true );
 check( 'normalize_edges', CoTranslate_String_Translator::normalize_edges( "\u{00A0} Hej \u{202F}\u{200B}" ), 'Hej' );
 
+check( 'gränsen för långa textnoder är 5000', CoTranslate_String_Translator::MAX_TEXT_LENGTH, 5000 );
+
 echo $fails ? "\n$fails test misslyckades\n" : "\nAlla test gröna\n";
 exit( $fails ? 1 : 0 );

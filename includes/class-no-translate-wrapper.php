@@ -205,8 +205,9 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 					list( $match, $offset ) = $m[0];
 					$map[ $counter ]        = $match;
 					$attached[ $counter ]   = array(
-						'before' => 1 === preg_match( '/\p{L}$/u', substr( $part, 0, $offset ) ),
-						'after'  => 1 === preg_match( '/^\p{L}/u', substr( $part, $offset + strlen( $match ) ) ),
+						'before'       => 1 === preg_match( '/\p{L}$/u', substr( $part, 0, $offset ) ),
+						'after'        => 1 === preg_match( '/^\p{L}/u', substr( $part, $offset + strlen( $match ) ) ),
+						'space_before' => 1 === preg_match( '/\s$/u', substr( $part, 0, $offset ) ),
 					);
 					return '<span translate="no" ' . self::MARKER_ATTR . '="' . $counter++ . '">' . $match . '</span>';
 				},
@@ -248,7 +249,7 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 			return $text;
 		}
 		$restored = preg_replace_callback(
-			'/(\p{L}?)<span\b[^>]*\b' . preg_quote( self::MARKER_ATTR, '/' ) . '\s*=\s*["\']?(\d+)["\']?[^>]*>(.*?)<\/span>(\p{L}*)/isu',
+			'/(.?)<span\b[^>]*\b' . preg_quote( self::MARKER_ATTR, '/' ) . '\s*=\s*["\']?(\d+)["\']?[^>]*>(.*?)<\/span>(\p{L}*)/isu',
 			function ( $m ) use ( $map, $attached ) {
 				$n      = (int) $m[2];
 				$term   = isset( $map[ $n ] ) ? $map[ $n ] : $m[3];
@@ -261,7 +262,11 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 						// som tas bort; längre eller versal är ett eget ord.
 						$after = preg_match( '/^\p{Ll}{1,3}$/u', $after ) ? '' : ' ' . $after;
 					}
-					if ( '' !== $before && empty( $attached[ $n ]['before'] ) ) {
+					if ( '' !== $before && preg_match( '/^\p{L}$/u', $before ) && empty( $attached[ $n ]['before'] ) ) {
+						$before .= ' ';
+					} elseif ( '' !== $before && ! empty( $attached[ $n ]['space_before'] )
+						&& ! preg_match( '/^[\s>(\[{"\'“‘«\-–—\/]$/u', $before ) ) {
+						// Mellanslaget före termen försvann ("4:30 p.m.Vansbro").
 						$before .= ' ';
 					}
 				}

@@ -2488,7 +2488,7 @@ class CoTranslate_Admin {
 		foreach ( $candidates as $raw_text ) {
 			$text = trim( html_entity_decode( $raw_text, ENT_QUOTES, 'UTF-8' ) );
 
-			if ( mb_strlen( $text ) < 2 || mb_strlen( $text ) > 500 ) {
+			if ( mb_strlen( $text ) < 2 || mb_strlen( $text ) > CoTranslate_String_Translator::MAX_TEXT_LENGTH ) {
 				continue;
 			}
 
