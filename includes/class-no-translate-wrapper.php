@@ -22,6 +22,16 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 	/** Attribut som numrerar skyddade termer i den text som skickas iväg. */
 	const MARKER_ATTR = 'data-cotranslate-nt';
 
+	/** Option med namn som står utan bestämd artikel på engelska, ett per rad. */
+	const NO_ARTICLE_OPTION = 'cotranslate_no_article_names';
+
+	/**
+	 * Ord som kan följa ett namn utan att namnet bestämmer dem. Står ett av
+	 * dessa efter namnet hör "the" till namnet och tas bort. Följs namnet av
+	 * något annat ord ("the Vansbrosimningen app") får "the" stå kvar.
+	 */
+	const NO_ARTICLE_FOLLOWERS = 'and|or|but|nor|is|are|was|were|will|would|can|could|has|have|had|does|did|due|in|on|at|for|with|from|to|of|by|as|since|until|after|before|during|which|who|where|when|because|if|so|than|this|that|again|too|also|took|takes|opens|opened|involves|starts|started|begins|began|kicks|returns|offers|attracts';
+
 	/** @var object Inre översättningsmotor. */
 	private $inner;
 
@@ -60,7 +70,7 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 	public function translate_text( array $texts, $source_lang, $target_lang ) {
 		$terms = $this->get_terms_for_language( $target_lang );
 		if ( empty( array_filter( $terms ) ) ) {
-			return $this->inner->translate_text( $texts, $source_lang, $target_lang );
+			return $this->finish_texts( $this->inner->translate_text( $texts, $source_lang, $target_lang ), $target_lang );
 		}
 
 		$plain     = array();
@@ -79,7 +89,7 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 		}
 
 		if ( empty( $protected ) ) {
-			return $this->inner->translate_text( $texts, $source_lang, $target_lang );
+			return $this->finish_texts( $this->inner->translate_text( $texts, $source_lang, $target_lang ), $target_lang );
 		}
 
 		$result = array();
@@ -110,7 +120,7 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 		foreach ( array_keys( $texts ) as $i ) {
 			$ordered[ $i ] = $result[ $i ] ?? '';
 		}
-		return array_values( $ordered );
+		return $this->finish_texts( array_values( $ordered ), $target_lang );
 	}
 
 	/**
@@ -119,11 +129,76 @@ class CoTranslate_No_Translate_Wrapper implements CoTranslate_Translator {
 	public function translate_html( $html, $source_lang, $target_lang ) {
 		$terms = $this->get_terms_for_language( $target_lang );
 		if ( empty( array_filter( $terms ) ) ) {
-			return $this->inner->translate_html( $html, $source_lang, $target_lang );
+			return $this->finish_html( $this->inner->translate_html( $html, $source_lang, $target_lang ), $target_lang );
 		}
 		list( $protected, $map, $attached ) = self::protect( $html, $terms );
 		$result = $this->inner->translate_html( $protected, $source_lang, $target_lang );
-		return is_string( $result ) ? self::restore( $result, $map, $attached ) : $result;
+		return $this->finish_html( is_string( $result ) ? self::restore( $result, $map, $attached ) : $result, $target_lang );
+	}
+
+	/**
+	 * Namn som ska stå utan bestämd artikel när målspråket är engelska.
+	 *
+	 * @param string $target_lang Målspråkets kod.
+	 * @return array Namn, tomma rader borttagna.
+	 */
+	public static function get_no_article_names( $target_lang ) {
+		if ( 0 !== strpos( strtolower( (string) $target_lang ), 'en' ) ) {
+			return array();
+		}
+		$raw = (string) get_option( self::NO_ARTICLE_OPTION, '' );
+		return array_values( array_filter( array_map( 'trim', preg_split( '/\r\n|\r|\n/', $raw ) ) ) );
+	}
+
+	/**
+	 * Tillämpa artikelregeln på en lista översatta texter.
+	 */
+	private function finish_texts( $result, $target_lang ) {
+		$names = self::get_no_article_names( $target_lang );
+		if ( empty( $names ) || ! is_array( $result ) ) {
+			return $result;
+		}
+		foreach ( $result as $i => $text ) {
+			$result[ $i ] = self::drop_articles( $text, $names );
+		}
+		return $result;
+	}
+
+	/**
+	 * Tillämpa artikelregeln på översatt HTML.
+	 */
+	private function finish_html( $result, $target_lang ) {
+		$names = self::get_no_article_names( $target_lang );
+		return ( empty( $names ) || ! is_string( $result ) ) ? $result : self::drop_articles( $result, $names );
+	}
+
+	/**
+	 * Ta bort "the" direkt före namn som ska stå utan bestämd artikel.
+	 *
+	 * DeepL skriver "the" före svenska egennamn ("won the Vansbro Tjejsim",
+	 * "The Sallyprovet (formerly …"). Engelskan blir naturligare utan, men
+	 * "the" hör ibland till ordet efter namnet ("the Vansbrosimningen app",
+	 * "the Vansbrosimningen office"). Därför tas "the" bara bort när namnet
+	 * följs av genitiv ("’s"), skiljetecken, en tagg, textslut eller ett
+	 * småord i NO_ARTICLE_FOLLOWERS. I alla andra fall står "the" kvar.
+	 *
+	 * @param string $text  Översatt text eller HTML.
+	 * @param array  $names Namn utan bestämd artikel.
+	 * @return string
+	 */
+	public static function drop_articles( $text, array $names ) {
+		if ( ! is_string( $text ) || '' === $text || empty( $names ) ) {
+			return $text;
+		}
+		usort( $names, function ( $a, $b ) {
+			return mb_strlen( $b ) - mb_strlen( $a );
+		} );
+		$alt     = implode( '|', array_map( function ( $n ) {
+			return preg_quote( $n, '/' );
+		}, $names ) );
+		$pattern = '/\b[Tt]he\s+(' . $alt . ')(?=(?:’s|\'s)(?!\p{L})|\s*(?:$|[.,;:!?)(\]}”"»…<|]|[–—]|-\s)|\s+(?:' . self::NO_ARTICLE_FOLLOWERS . ')\b)/u';
+		$out     = preg_replace( $pattern, '$1', $text );
+		return null === $out ? $text : $out;
 	}
 
 	/**

@@ -94,6 +94,45 @@ check( 'inget extra mellanslag efter tagg', $W::restore( '<b><span translate="no
 list( $p, $m, $a ) = $W::protect( '(Vansbro Halvsim)', array( 'Vansbro Halvsim' ) );
 check( 'utan mellanslag i källan läggs inget till', $W::restore( '(<span translate="no" data-cotranslate-nt="0">Vansbro Halvsim</span>)', $m, $a ), '(Vansbro Halvsim)' );
 
+// --- Namn utan bestämd artikel ("the") -----------------------------------
+$names = array( 'Vansbrosimningen', 'Vansbro Tjejsim', 'Vansbro Vintersim', 'Sallyprovet', 'Lilla Vansbrosimningen' );
+$cases = array(
+	// Tas bort: "the" hör till namnet.
+	'Welcome to the Vansbrosimningen, 3 km'                       => 'Welcome to Vansbrosimningen, 3 km',
+	'Sofie Callo von Platen won the Vansbro Tjejsim'              => 'Sofie Callo von Platen won Vansbro Tjejsim',
+	'Registration for the Vansbro Vintersim is now open.'         => 'Registration for Vansbro Vintersim is now open.',
+	'The Sallyprovet (formerly the Vansbro Vattenprovet) has no age limit.' => 'Sallyprovet (formerly the Vansbro Vattenprovet) has no age limit.',
+	'miss the start of the Vansbrosimningen due to injury'       => 'miss the start of Vansbrosimningen due to injury',
+	'participate in the Vansbrosimningen, Vansbro Öppen Älv'      => 'participate in Vansbrosimningen, Vansbro Öppen Älv',
+	'races in the Vansbrosimningen and Vansbro Triathlon'         => 'races in Vansbrosimningen and Vansbro Triathlon',
+	'the history of the Vansbrosimningen and the Lilla Vansbrosimningen.' => 'the history of Vansbrosimningen and Lilla Vansbrosimningen.',
+	'Victory at the Vansbrosimningen'                             => 'Victory at Vansbrosimningen',
+	'<a href="#">the Vansbrosimningen</a>'                        => '<a href="#">Vansbrosimningen</a>',
+	'at the Vansbrosimningen’s finish line'                       => 'at Vansbrosimningen’s finish line',
+	// Står kvar: "the" hör till ordet efter, eller osäkert.
+	'The map is also available in the Vansbrosimningen app.'      => 'The map is also available in the Vansbrosimningen app.',
+	'at the Vansbrosimningen office after the event'              => 'at the Vansbrosimningen office after the event',
+	'Registration for the Vansbrosimningen race is binding'       => 'Registration for the Vansbrosimningen race is binding',
+	'as the Vansbro Vintersim took place'                         => 'as Vansbro Vintersim took place',
+	'as the Vansbro Vintersim drew a crowd'                       => 'as the Vansbro Vintersim drew a crowd',
+	'the Vansbrosimningen 2023 Schedule'                          => 'the Vansbrosimningen 2023 Schedule',
+	'a bridge over the Vanån.'                                    => 'a bridge over the Vanån.',
+	'other events, then Vansbrosimningen.'                        => 'other events, then Vansbrosimningen.',
+	'breathe Vansbrosimningen.'                                   => 'breathe Vansbrosimningen.',
+	'Results from the Vansbrosimningen | Vansbrosimningen'         => 'Results from Vansbrosimningen | Vansbrosimningen',
+	'the Vansbrosimningen—which turns 75'                          => 'Vansbrosimningen—which turns 75',
+	'This year the Vansbro Vintersim took place in February'       => 'This year Vansbro Vintersim took place in February',
+	'a the Vansbrosimningen-themed party'                          => 'a the Vansbrosimningen-themed party',
+);
+foreach ( $cases as $in => $expected ) {
+	check( 'artikel: ' . $in, $W::drop_articles( $in, $names ), $expected );
+}
+check( 'artikel: tom namnlista ändrar inget', $W::drop_articles( 'won the Vansbro Tjejsim.', array() ), 'won the Vansbro Tjejsim.' );
+$GLOBALS['test_options'][ CoTranslate_No_Translate_Wrapper::NO_ARTICLE_OPTION ] = "Vansbro Tjejsim\n\nSallyprovet";
+check( 'artikel: bara för engelska', $W::get_no_article_names( 'sv' ), array() );
+check( 'artikel: namn för engelska', $W::get_no_article_names( 'en' ), array( 'Vansbro Tjejsim', 'Sallyprovet' ) );
+$GLOBALS['test_options'][ CoTranslate_No_Translate_Wrapper::NO_ARTICLE_OPTION ] = '';
+
 // --- translate_text genom wrappern med en låtsasmotor -------------------
 class Fake_Engine implements CoTranslate_Translator {
 	public $calls = array();

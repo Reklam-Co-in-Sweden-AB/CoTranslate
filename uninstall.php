@@ -41,6 +41,7 @@ $options = array(
 	'cotranslate_menu_switcher_location',
 	'cotranslate_excluded_posts',
 	'cotranslate_no_translate_terms',
+	'cotranslate_no_article_names',
 	'cotranslate_glossary_terms',
 	'cotranslate_translation_context',
 	'cotranslate_deepl_glossary_ids',

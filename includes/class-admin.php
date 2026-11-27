@@ -124,6 +124,10 @@ class CoTranslate_Admin {
 				}
 			}
 			update_option( 'cotranslate_no_translate_terms', $saved );
+
+			$names = isset( $_POST['cotranslate_no_article'] ) ? (string) wp_unslash( $_POST['cotranslate_no_article'] ) : '';
+			$names = array_filter( array_map( 'sanitize_text_field', array_map( 'trim', preg_split( '/\r\n|\r|\n/', $names ) ) ) );
+			update_option( CoTranslate_No_Translate_Wrapper::NO_ARTICLE_OPTION, implode( "\n", $names ) );
 			echo '<div class="notice notice-success"><p>Sparat. Gäller allt som översätts från och med nu.</p></div>';
 		}
 
@@ -155,6 +159,14 @@ class CoTranslate_Admin {
 				<h2><?php echo esc_html( $label ); ?></h2>
 				<textarea name="cotranslate_nt[<?php echo esc_attr( $lang ); ?>]" rows="4" class="large-text code"><?php echo esc_textarea( $terms[ $lang ] ?? '' ); ?></textarea>
 			<?php endforeach; ?>
+
+			<h2>Namn utan bestämd artikel (engelska)</h2>
+			<p class="description">
+				Egennamn som ska stå utan "the" i engelsk översättning, ett per rad — t.ex. svenska namn på lopp och evenemang.
+				"the" tas bara bort när det hör till själva namnet ("won the Vansbro Tjejsim." blir "won Vansbro Tjejsim.") och
+				står kvar när namnet bestämmer ordet efter ("the Vansbrosimningen app"). Lägg inte in floder och liknande som ska ha "the".
+			</p>
+			<textarea name="cotranslate_no_article" rows="4" class="large-text code"><?php echo esc_textarea( (string) get_option( CoTranslate_No_Translate_Wrapper::NO_ARTICLE_OPTION, '' ) ); ?></textarea>
 
 			<p><button type="submit" class="button button-primary">Spara</button></p>
 		</form>
