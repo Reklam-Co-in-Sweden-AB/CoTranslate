@@ -58,6 +58,40 @@ class CoTranslate_DeepL_API implements CoTranslate_Translator {
 	}
 
 	/**
+	 * Översätt textsträngar som innehåller HTML-escapad text med inlindade termer.
+	 *
+	 * Används av CoTranslate_No_Translate_Wrapper. tag_handling=html behövs för
+	 * att DeepL ska respektera translate="no"; meningsdelningen är densamma som
+	 * för vanliga strängar.
+	 *
+	 * @param array  $texts       HTML-escapade texter.
+	 * @param string $source_lang Källspråk.
+	 * @param string $target_lang Målspråk.
+	 * @return array|WP_Error Översatta texter (fortfarande HTML) eller WP_Error.
+	 */
+	public function translate_text_as_html( array $texts, $source_lang, $target_lang ) {
+		if ( empty( $texts ) ) {
+			return array();
+		}
+
+		$api_key = cotranslate_get_api_key();
+		if ( empty( $api_key ) ) {
+			return new WP_Error( 'no_api_key', 'DeepL API-nyckel saknas.' );
+		}
+
+		$results = array();
+		foreach ( array_chunk( $texts, self::MAX_BATCH_SIZE ) as $chunk ) {
+			$response = $this->call_api( $chunk, $source_lang, $target_lang, true, true, false );
+			if ( is_wp_error( $response ) ) {
+				return $response;
+			}
+			$results = array_merge( $results, $response );
+		}
+
+		return $results;
+	}
+
+	/**
 	 * Översätt HTML-innehåll.
 	 *
 	 * DeepL hanterar HTML-taggar direkt — ingen egen DOM-parsning behövs.
@@ -222,9 +256,11 @@ class CoTranslate_DeepL_API implements CoTranslate_Translator {
 	 * @param string $source_lang Källspråk (WordPress-format).
 	 * @param string $target_lang Målspråk (WordPress-format).
 	 * @param bool   $html        Om true, aktivera tag_handling=html.
+	 * @param bool   $use_glossary     Om DeepL-ordlistan ska användas.
+	 * @param bool   $html_nonewlines  Med $html: dela inte meningar vid radbrytning.
 	 * @return array|WP_Error Array med översatta texter eller WP_Error.
 	 */
-	private function call_api( array $texts, $source_lang, $target_lang, $html = false, $use_glossary = true ) {
+	private function call_api( array $texts, $source_lang, $target_lang, $html = false, $use_glossary = true, $html_nonewlines = true ) {
 		$api_key  = cotranslate_get_api_key();
 		$base_url = cotranslate_get_api_base_url();
 
@@ -235,8 +271,10 @@ class CoTranslate_DeepL_API implements CoTranslate_Translator {
 		);
 
 		if ( $html ) {
-			$body['tag_handling']    = 'html';
-			$body['split_sentences'] = 'nonewlines';
+			$body['tag_handling'] = 'html';
+			if ( $html_nonewlines ) {
+				$body['split_sentences'] = 'nonewlines';
+			}
 		}
 
 		// Ordlista (DeepL glossary) för språkparet, om synkad.
@@ -281,7 +319,7 @@ class CoTranslate_DeepL_API implements CoTranslate_Translator {
 				if ( CoTranslate_DeepL_Glossary::get_id( $target_lang ) === $glossary_id ) {
 					CoTranslate_DeepL_Glossary::forget_id( $target_lang, 'DeepL avvisade ordlistan: ' . $message . ' Spara ordlistan igen för att synka om.' );
 				}
-				return $this->call_api( $texts, $source_lang, $target_lang, $html, false );
+				return $this->call_api( $texts, $source_lang, $target_lang, $html, false, $html_nonewlines );
 			}
 
 			// Specifika felkoder

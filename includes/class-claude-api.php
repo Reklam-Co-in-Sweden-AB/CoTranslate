@@ -68,6 +68,21 @@ class CoTranslate_Claude_API implements CoTranslate_Translator {
 	}
 
 	/**
+	 * Översätt textsträngar som innehåller HTML-escapad text med inlindade termer.
+	 *
+	 * Används av CoTranslate_No_Translate_Wrapper. Prompten beskriver redan
+	 * de skyddade elementen, så det räcker att gå samma väg som translate_text.
+	 *
+	 * @param array  $texts       HTML-escapade texter.
+	 * @param string $source_lang Källspråk.
+	 * @param string $target_lang Målspråk.
+	 * @return array|WP_Error Översatta texter eller WP_Error.
+	 */
+	public function translate_text_as_html( array $texts, $source_lang, $target_lang ) {
+		return $this->translate_text( $texts, $source_lang, $target_lang );
+	}
+
+	/**
 	 * Översätt HTML-innehåll.
 	 *
 	 * @param string $html        HTML att översätta.
@@ -287,7 +302,7 @@ class CoTranslate_Claude_API implements CoTranslate_Translator {
 			$prompt .= " The text contains HTML markup — preserve all HTML tags exactly as they are, only translate the visible text content.";
 		}
 
-		$prompt .= " Any HTML comment of the form <!--COTRANSLATE_NT_0--> is a protected placeholder — copy it verbatim into the output and never translate, alter, remove or reorder it.";
+		$prompt .= ' Elements of the form <span translate="no" data-cotranslate-nt="0">term</span> wrap protected terms — copy each such element verbatim (tag and content) into the grammatically correct place in the translation, and never translate, alter or remove it.';
 
 		$prompt .= " Output ONLY the translation, nothing else. No explanations, no quotes, no labels.";
 
@@ -312,7 +327,7 @@ class CoTranslate_Claude_API implements CoTranslate_Translator {
 		$prompt  = "Translate the following texts from {$source_name} to {$target_name}.\n";
 		$prompt .= "Output a JSON array with the translations in the same order. No explanations.\n";
 		$prompt .= "Example output: [\"translation 1\", \"translation 2\"]\n";
-		$prompt .= "Any HTML comment of the form <!--COTRANSLATE_NT_0--> is a protected placeholder — copy it verbatim into the output and never translate, alter, remove or reorder it.\n";
+		$prompt .= 'Elements of the form <span translate="no" data-cotranslate-nt="0">term</span> wrap protected terms — copy each such element verbatim (tag and content) into the grammatically correct place in the translation, and never translate, alter or remove it.' . "\n";
 
 		if ( ! empty( $custom_prompt ) ) {
 			$prompt .= "\nAdditional instructions: " . $custom_prompt . "\n";
